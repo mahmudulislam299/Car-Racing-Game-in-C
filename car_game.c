@@ -188,6 +188,30 @@ static void line(int x1,int y1,int x2,int y2,Color c){
     glVertex2i(x1,y1); glVertex2i(x2,y2);
     glEnd();
 }
+static void tri2D(int x1,int y1,int x2,int y2,int x3,int y3,Color c){
+    use2D(); setCol(ren,c);
+    glBegin(GL_TRIANGLES);
+    glVertex2i(x1,y1); glVertex2i(x2,y2); glVertex2i(x3,y3);
+    glEnd();
+}
+static void circle2D(int cx,int cy,int r,Color c){
+    static const int px[17]={100,92,71,38,0,-38,-71,-92,-100,-92,-71,-38,0,38,71,92,100};
+    static const int py[17]={0,38,71,92,100,92,71,38,0,-38,-71,-92,-100,-92,-71,-38,0};
+    use2D(); setCol(ren,c);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2i(cx,cy);
+    for(int i=0;i<17;i++) glVertex2i(cx+(px[i]*r)/100,cy+(py[i]*r)/100);
+    glEnd();
+}
+static void glowR(int x,int y,int w,int h,Color c);
+static void drawHeart2D(int x,int y,int s,Color c){
+    Color shine={255,170,180,190};
+    glowR(x+2,y+2,s*2,s*2,(Color){255,35,70,85});
+    circle2D(x+s/2,y+s/2,s/2,c);
+    circle2D(x+s+s/2,y+s/2,s/2,c);
+    tri2D(x,y+s/2,x+s*2,y+s/2,x+s,y+s*2,c);
+    circle2D(x+s/2-1,y+s/2-1,s/5,shine);
+}
 static void glowR(int x,int y,int w,int h,Color c){
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
@@ -439,6 +463,62 @@ static void drawSpeedLines(void){
    Sky, wide grass strips, road shoulders, trees
    ══════════════════════════════════════════════ */
 static void drawBackground(void){
+    for(int y=0;y<WIN_H;y+=2){
+        Uint8 r=(Uint8)(55+y/8), g=(Uint8)(135+y/7), b=(Uint8)(218+y/20);
+        fillR(0,y,WIN_W,2,(Color){r,g,b,255});
+    }
+
+    circle2D(92,72,38,(Color){255,226,130,210});
+    circle2D(92,72,24,(Color){255,246,190,255});
+
+    for(int i=0;i<7;i++){
+        int cx=(i*142-(frameNo/4)%170+WIN_W)%WIN_W;
+        int cy=24+(i%3)*24;
+        blendR(cx,cy,70,12,(Color){255,255,255,105});
+        blendR(cx+20,cy-8,48,16,(Color){255,255,255,86});
+        blendR(cx+54,cy+4,38,9,(Color){255,255,255,68});
+    }
+
+    int offFar=(int)(roadOff*0.10f)%240;
+    for(int x=-240-offFar;x<WIN_W+240;x+=120){
+        tri2D(x,150,x+70,62+(x&31),x+160,150,(Color){76,118,132,255});
+        tri2D(x+40,150,x+112,84+((x+13)&27),x+210,150,(Color){66,104,124,255});
+        tri2D(x+48,104+((x+13)&27),x+112,84+((x+13)&27),x+82,112+((x+13)&20),(Color){228,239,238,230});
+    }
+
+    int offNear=(int)(roadOff*0.22f)%260;
+    for(int x=-260-offNear;x<WIN_W+260;x+=130){
+        tri2D(x,190,x+90,88+((x+37)&39),x+190,190,(Color){38,105,84,255});
+        tri2D(x+82,190,x+160,106+((x+5)&35),x+250,190,(Color){30,91,75,255});
+    }
+
+    fillR(0,HORIZON_Y,WIN_W,WIN_H-HORIZON_Y,(Color){22,118,54,255});
+    for(int y=(int)(roadOff*0.55f)%42-42;y<WIN_H;y+=42){
+        if(y>HORIZON_Y){
+            fillR(0,y,WIN_W,5,(Color){40,158,67,255});
+            fillR(0,y+18,WIN_W,3,(Color){17,101,43,255});
+        }
+    }
+
+    for(int y=HORIZON_Y+(int)(roadOff*1.5f)%82-82;y<WIN_H;y+=82){
+        if(y<HORIZON_Y+12) continue;
+        int scale=2+((y-HORIZON_Y)*8)/(WIN_H-HORIZON_Y);
+        int lx=roadLeftAt(y)-20-scale;
+        int rx=roadRightAt(y)+12;
+        fillR(lx,y,scale,scale*5,(Color){245,245,235,255});
+        fillR(lx,y+scale*3,scale,scale*2,(Color){220,40,35,255});
+        fillR(rx,y+38,scale,scale*5,(Color){245,245,235,255});
+        fillR(rx,y+38+scale*3,scale,scale*2,(Color){220,40,35,255});
+    }
+
+    Color oldFlowers[3]={{255,225,80,255},{255,80,150,255},{190,235,255,255}};
+    for(int i=0;i<26;i++){
+        int fy=(int)(HORIZON_Y+24+i*31+roadOff*0.8f)%WIN_H;
+        if(fy<HORIZON_Y) fy+=HORIZON_Y;
+        int fx=(i%2)?(18+(i*37)%150):(530+(i*29)%145);
+        fillR(fx,fy,3,3,oldFlowers[i%3]);
+    }
+    return;
     /* Sky gradient */
     for(int y=0;y<WIN_H;y+=2){
         Uint8 r=(Uint8)(72+y/7), g=(Uint8)(150+y/9), b=(Uint8)(215+y/18);
@@ -614,8 +694,10 @@ static void box3D(float x,float y,float z,float sx,float sy,float sz,Color c){
 }
 
 static void drawWheel3D(float x,float z,float side){
-    box3D(x+side*0.38f,0.08f,z-0.32f,0.18f,0.28f,0.28f,(Color){18,18,18,255});
-    box3D(x+side*0.38f,0.08f,z+0.32f,0.18f,0.28f,0.28f,(Color){18,18,18,255});
+    box3D(x+side*0.43f,0.06f,z-0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
+    box3D(x+side*0.43f,0.06f,z+0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
+    box3D(x+side*0.45f,0.13f,z-0.42f,0.04f,0.15f,0.16f,(Color){195,205,210,255});
+    box3D(x+side*0.45f,0.13f,z+0.42f,0.04f,0.15f,0.16f,(Color){195,205,210,255});
 }
 
 /* ══════════════════════════════════════════════
@@ -651,6 +733,18 @@ static void drawCar(Car *c,int isPlayer){
     box3D(carX,0.22f+carBob,carZ-0.72f,0.64f,0.18f,0.28f,shade(body,1.12f));
     box3D(carX,0.23f+carBob,carZ+0.72f,0.64f,0.16f,0.28f,shade(body,0.65f));
     if(isPlayer) box3D(carX,0.80f+carBob,carZ-0.05f,0.12f,0.03f,1.05f,(Color){20,255,235,255});
+
+    /* Sport-car details: windshield, side mirrors, spoiler, trim, and grille. */
+    box3D(carX,0.73f+carBob,carZ-0.22f,0.48f,0.04f,0.28f,(Color){45,95,125,255});
+    box3D(carX,0.70f+carBob,carZ+0.27f,0.42f,0.035f,0.22f,(Color){34,68,92,255});
+    box3D(carX-0.54f,0.50f+carBob,carZ-0.22f,0.12f,0.08f,0.18f,shade(body,0.82f));
+    box3D(carX+0.54f,0.50f+carBob,carZ-0.22f,0.12f,0.08f,0.18f,shade(body,0.82f));
+    box3D(carX,0.54f+carBob,carZ+0.90f,0.92f,0.07f,0.12f,shade(body,0.55f));
+    box3D(carX-0.28f,0.23f+carBob,carZ-0.91f,0.18f,0.07f,0.04f,(Color){24,24,26,255});
+    box3D(carX,0.24f+carBob,carZ-0.92f,0.24f,0.05f,0.035f,(Color){24,24,26,255});
+    box3D(carX+0.28f,0.23f+carBob,carZ-0.91f,0.18f,0.07f,0.04f,(Color){24,24,26,255});
+    box3D(carX-0.48f,0.24f+carBob,carZ,0.035f,0.11f,1.10f,shade(body,0.58f));
+    box3D(carX+0.48f,0.24f+carBob,carZ,0.035f,0.11f,1.10f,shade(body,0.58f));
 
     drawWheel3D(carX,carZ,-1.0f);
     drawWheel3D(carX,carZ, 1.0f);
@@ -774,15 +868,10 @@ static void drawHUD(void){
 
     renderText("LIVES",ROAD_RIGHT+10, 8,yellow,font);
     /* Heart icons for lives */
-    for(int i=0;i<lives;i++){
-        int hx=ROAD_RIGHT+10+i*26;
-        fillR(hx,   30, 9,13,red);
-        fillR(hx+9, 30, 9,13,red);
-        fillR(hx+2, 25, 6, 8,red);
-        fillR(hx+10,25, 6, 8,red);
-        fillR(hx+3, 40, 6, 5,red);
-        fillR(hx+5, 44, 4, 4,red);
-        fillR(hx+6, 47, 2, 3,red);
+    for(int i=0;i<MAX_LIVES;i++){
+        int hx=ROAD_RIGHT+10+i*28;
+        Color hc=(i<lives)?red:(Color){75,75,80,210};
+        drawHeart2D(hx,28,9,hc);
     }
 
     int hi=0;
@@ -839,12 +928,7 @@ static void titleScreen(void){
         frameNo++;
         roadOff+=3.2f;
         updateSpeedLines();
-        /* Dark gradient */
-        for(int y=0;y<WIN_H;y++){
-            int v=20+(int)(y*0.15f); if(v>86)v=86;
-            fillR(0,y,WIN_W,1,(Color){2,6,(Uint8)v,255});
-        }
-        fillR(0,HORIZON_Y,WIN_W,WIN_H-HORIZON_Y,(Color){18,80,48,255});
+        drawBackground();
         drawRoad();
         drawSpeedLines();
         blendR(82,44,536,98,(Color){0,0,0,185});
