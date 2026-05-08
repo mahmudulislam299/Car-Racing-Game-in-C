@@ -33,7 +33,8 @@
 /* ─── Game limits ─── */
 #define MAX_ENEMIES    5
 #define MAX_LIVES      3
-#define MAX_PARTICLES  40
+#define MAX_PARTICLES  90
+#define MAX_SPEED_LINES 28
 
 /* ─── Speed ─── */
 #define INITIAL_SPEED    2
@@ -67,6 +68,12 @@ typedef struct {
     Color col;
 } Particle;
 
+typedef struct {
+    float x, y;
+    int len, speed;
+    Color col;
+} SpeedLine;
+
 /* ══════════════════════════════════════════════
    GLOBALS
    ══════════════════════════════════════════════ */
@@ -78,6 +85,7 @@ static TTF_Font     *bigFont = NULL;
 static Car      player;
 static Car      enemies[MAX_ENEMIES];
 static Particle sparks[MAX_PARTICLES];
+static SpeedLine speedLines[MAX_SPEED_LINES];
 
 static int   score     = 0;
 static int   lives     = MAX_LIVES;
@@ -85,6 +93,9 @@ static int   gameSpeed = INITIAL_SPEED;
 static float roadOff   = 0.0f;
 static int   invFrames = 0;   /* countdown – player is untouchable while > 0 */
 static int   running   = 1;
+static int   frameNo   = 0;
+static int   shakeFrames = 0;
+static int   hudPulse  = 0;
 
 static Color enemyCols[6] = {
     {220,  0,  0,255},   /* red     */
@@ -111,6 +122,29 @@ static void blendR(int x,int y,int w,int h,Color c){
     SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
     fillR(x,y,w,h,c);
     SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+}
+static Color shade(Color c,float k){
+    Color o={(Uint8)(c.r*k>255?255:c.r*k),
+             (Uint8)(c.g*k>255?255:c.g*k),
+             (Uint8)(c.b*k>255?255:c.b*k),c.a};
+    return o;
+}
+static void line(int x1,int y1,int x2,int y2,Color c){
+    setCol(ren,c); SDL_RenderDrawLine(ren,x1,y1,x2,y2);
+}
+static void glowR(int x,int y,int w,int h,Color c){
+    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+    for(int i=3;i>0;i--){
+        Color g=c; g.a=(Uint8)(c.a/(i+1));
+        SDL_Rect r={x-i*3,y-i*3,w+i*6,h+i*6};
+        SDL_RenderFillRect(ren,&r);
+    }
+    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+}
+static int pulse(int frame,int period,int amp){
+    int p=frame%period;
+    if(p>period/2) p=period-p;
+    return (p*amp*2)/period;
 }
 
 /* ══════════════════════════════════════════════
@@ -215,7 +249,10 @@ static void updateEnemies(void){
         enemies[i].y+=(float)enemies[i].speed;
         if(enemies[i].y > WIN_H+CAR_H){
             score++;
-            if(score%SPEED_UP_EVERY==0 && gameSpeed<MAX_SPEED) gameSpeed++;
+            if(score%SPEED_UP_EVERY==0 && gameSpeed<MAX_SPEED){
+                gameSpeed++;
+                hudPulse=24;
+            }
             spawnEnemy(i);
         }
     }
@@ -234,6 +271,21 @@ static void spawnExplosion(int cx,int cy){
         sparks[i].col=cols[rand()%4];
     }
 }
+static void spawnExhaust(void){
+    for(int n=0;n<3;n++){
+        for(int i=0;i<MAX_PARTICLES;i++){
+            if(sparks[i].life<=0){
+                sparks[i].x=player.x+CAR_W/2-5+(float)(rand()%11);
+                sparks[i].y=player.y+CAR_H-4+(float)(rand()%6);
+                sparks[i].vx=((rand()%80)-40)/55.0f;
+                sparks[i].vy=1.2f+(rand()%70)/45.0f;
+                sparks[i].life=12+rand()%14;
+                sparks[i].col=(Color){120,210,255,125};
+                break;
+            }
+        }
+    }
+}
 static void updateParticles(void){
     for(int i=0;i<MAX_PARTICLES;i++){
         if(sparks[i].life<=0) continue;
@@ -248,24 +300,86 @@ static void drawParticles(void){
         fillR((int)sparks[i].x,(int)sparks[i].y,sz,sz,sparks[i].col);
     }
 }
+static void resetSpeedLines(void){
+    for(int i=0;i<MAX_SPEED_LINES;i++){
+        int side=rand()%2;
+        speedLines[i].x=(float)(side ? ROAD_RIGHT+18+rand()%140 : rand()%(ROAD_LEFT-18));
+        speedLines[i].y=(float)(rand()%WIN_H);
+        speedLines[i].len=18+rand()%45;
+        speedLines[i].speed=7+rand()%9;
+        speedLines[i].col=(Color){180,240,255,(Uint8)(60+rand()%90)};
+    }
+}
+static void updateSpeedLines(void){
+    for(int i=0;i<MAX_SPEED_LINES;i++){
+        speedLines[i].y+=(float)(speedLines[i].speed+gameSpeed*2);
+        if(speedLines[i].y>WIN_H+speedLines[i].len){
+            int side=rand()%2;
+            speedLines[i].x=(float)(side ? ROAD_RIGHT+18+rand()%140 : rand()%(ROAD_LEFT-18));
+            speedLines[i].y=(float)(-rand()%160);
+            speedLines[i].len=18+rand()%45+gameSpeed*3;
+            speedLines[i].speed=7+rand()%9;
+        }
+    }
+}
+static void drawSpeedLines(void){
+    if(gameSpeed<4) return;
+    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+    for(int i=0;i<MAX_SPEED_LINES;i++){
+        line((int)speedLines[i].x,(int)speedLines[i].y,
+             (int)speedLines[i].x,(int)speedLines[i].y+speedLines[i].len,
+             speedLines[i].col);
+    }
+    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+}
 
 /* ══════════════════════════════════════════════
    drawBackground()
    Sky, wide grass strips, road shoulders, trees
    ══════════════════════════════════════════════ */
 static void drawBackground(void){
-    /* Sky */
-    fillR(0,0,WIN_W,WIN_H,(Color){135,206,235,255});
+    /* Sky gradient */
+    for(int y=0;y<WIN_H;y+=2){
+        Uint8 r=(Uint8)(72+y/7), g=(Uint8)(150+y/9), b=(Uint8)(215+y/18);
+        fillR(0,y,WIN_W,2,(Color){r,g,b,255});
+    }
+
+    Color hill1={60,128,105,255}, hill2={42,108,82,255};
+    for(int x=-40;x<WIN_W;x+=80){
+        int wave=(x+frameNo/2)%70; if(wave<0) wave+=70;
+        int h=38+wave;
+        fillR(x,118-h,80,h,hill1);
+        fillR(x+20,135-h/2,70,h/2,hill2);
+    }
+
+    for(int i=0;i<5;i++){
+        int cx=(i*165-(frameNo/3)%180+WIN_W)%WIN_W;
+        int cy=22+i*17;
+        blendR(cx,cy,58,10,(Color){255,255,255,95});
+        blendR(cx+22,cy-7,42,10,(Color){255,255,255,75});
+    }
 
     /* Grass strips (narrower now – road is wider) */
-    Color gr={34,139,34,255};
+    Color gr={25,130,55,255};
     fillR(0,0,ROAD_LEFT,WIN_H,gr);
     fillR(ROAD_RIGHT,0,WIN_W-ROAD_RIGHT,WIN_H,gr);
+
+    for(int y=(int)(roadOff*0.55f)%42-42;y<WIN_H;y+=42){
+        fillR(0,y,ROAD_LEFT-8,6,(Color){40,160,64,255});
+        fillR(ROAD_RIGHT+8,y+18,WIN_W-ROAD_RIGHT-8,6,(Color){40,160,64,255});
+    }
 
     /* Road shoulders */
     Color sh={40,40,40,255};
     fillR(ROAD_LEFT-8,0,8,WIN_H,sh);
     fillR(ROAD_RIGHT, 0,8,WIN_H,sh);
+
+    for(int y=(int)(roadOff*1.2f)%76-76;y<WIN_H;y+=76){
+        fillR(ROAD_LEFT-19,y,8,20,(Color){245,245,245,255});
+        fillR(ROAD_LEFT-19,y+20,8,12,(Color){230,30,30,255});
+        fillR(ROAD_RIGHT+11,y+38,8,20,(Color){245,245,245,255});
+        fillR(ROAD_RIGHT+11,y+58,8,12,(Color){230,30,30,255});
+    }
 
     /* Scrolling trees (parallax – slower than road) */
     Color trunk={101,67,33,255},leaf={20,120,20,255},leafD={15,90,15,255};
@@ -285,6 +399,13 @@ static void drawBackground(void){
         fillR(tx-26, ty2+14,62,18,leafD);
         fillR(tx-18, ty2+28,46,12,leafD);
     }
+
+    Color flowers[3]={{255,225,80,255},{255,80,150,255},{190,235,255,255}};
+    for(int i=0;i<18;i++){
+        int fy=(int)(i*53+roadOff*0.75f)%WIN_H;
+        int fx=(i%2)?(20+(i*29)%(ROAD_LEFT-42)):(ROAD_RIGHT+22+(i*31)%(WIN_W-ROAD_RIGHT-45));
+        fillR(fx,fy,3,3,flowers[i%3]);
+    }
 }
 
 /* ══════════════════════════════════════════════
@@ -292,10 +413,23 @@ static void drawBackground(void){
    Road surface, yellow kerbs, scrolling dashes
    ══════════════════════════════════════════════ */
 static void drawRoad(void){
-    fillR(ROAD_LEFT,0,ROAD_W,WIN_H,(Color){55,55,55,255});
+    fillR(ROAD_LEFT,0,ROAD_W,WIN_H,(Color){45,48,52,255});
+    for(int x=0;x<ROAD_W;x+=18){
+        Uint8 v=(Uint8)(42+(x%54));
+        fillR(ROAD_LEFT+x,0,18,WIN_H,(Color){v,v,v+3,255});
+    }
+
+    /* Center shine and tire marks */
+    blendR(ROAD_LEFT+ROAD_W/2-50,0,100,WIN_H,(Color){255,255,255,18});
+    for(int y=(int)(roadOff*0.9f)%130-130;y<WIN_H;y+=130){
+        blendR(ROAD_LEFT+44,y,18,76,(Color){0,0,0,55});
+        blendR(ROAD_RIGHT-62,y+42,18,76,(Color){0,0,0,45});
+    }
 
     /* Yellow kerb lines */
     Color kerb={255,220,0,255};
+    glowR(ROAD_LEFT-4,0,5,WIN_H,(Color){255,190,0,70});
+    glowR(ROAD_RIGHT-1,0,5,WIN_H,(Color){255,190,0,70});
     fillR(ROAD_LEFT-4,0,5,WIN_H,kerb);
     fillR(ROAD_RIGHT-1,0,5,WIN_H,kerb);
 
@@ -304,6 +438,8 @@ static void drawRoad(void){
     int dashH=36,gapH=22,period=dashH+gapH;
     int off=(int)roadOff%period;
     for(int y=-period+off;y<WIN_H;y+=period){
+        glowR(ROAD_LEFT+LANE_W-2,    y,4,dashH,(Color){255,255,255,80});
+        glowR(ROAD_LEFT+LANE_W*2-2,  y,4,dashH,(Color){255,255,255,80});
         fillR(ROAD_LEFT+LANE_W-2,    y,4,dashH,wh);  /* divider 1 */
         fillR(ROAD_LEFT+LANE_W*2-2,  y,4,dashH,wh);  /* divider 2 */
     }
@@ -330,9 +466,12 @@ static void drawWheel(int wx,int wy,int ww,int wh){
 static void drawCar(Car *c,int isPlayer){
     if(!c->active) return;
     int x=(int)c->x, y=(int)c->y;
+    int bob=isPlayer ? pulse(frameNo,28,3)-1 : pulse(frameNo+(int)c->y,34,2)-1;
+    y+=bob;
 
     /* Drop shadow */
-    blendR(x+4,y+10,CAR_W,CAR_H-4,(Color){0,0,0,50});
+    blendR(x+5,y+13,CAR_W,CAR_H-2,(Color){0,0,0,70});
+    if(isPlayer) glowR(x-2,y+4,CAR_W+4,CAR_H-4,(Color){0,210,255,45});
 
     /* ── Body (3 rects for rounded silhouette) ── */
     fillR(x+5, y+2,  CAR_W-10, CAR_H-2,  c->body);
@@ -340,8 +479,10 @@ static void drawCar(Car *c,int isPlayer){
     fillR(x,   y+16, CAR_W,    CAR_H-30, c->body);
 
     /* Darker lower-body shade for depth */
-    Color dk={(Uint8)(c->body.r*0.72f),(Uint8)(c->body.g*0.72f),(Uint8)(c->body.b*0.72f),255};
+    Color dk=shade(c->body,0.72f);
     fillR(x+2,y+CAR_H/2,CAR_W-4,CAR_H/2-12,dk);
+    blendR(x+4,y+7,5,CAR_H-18,(Color){255,255,255,70});
+    blendR(x+CAR_W-9,y+11,4,CAR_H-26,(Color){0,0,0,45});
 
     /* ── Cabin ── */
     Color cabin=isPlayer?(Color){195,245,255,255}:(Color){255,205,205,255};
@@ -365,6 +506,7 @@ static void drawCar(Car *c,int isPlayer){
     if(isPlayer){
         Color stripe={0,155,195,255};
         fillR(x+11,y+18,CAR_W-22,CAR_H-38,stripe);
+        glowR(x+12,y+18,CAR_W-24,CAR_H-38,(Color){80,240,255,55});
     }
 
     /* ── Body outline ── */
@@ -418,6 +560,8 @@ static void drawHUD(void){
     Color panelBg={0,0,0,165};
     blendR(0,           0,ROAD_LEFT-8,         115,panelBg);
     blendR(ROAD_RIGHT+8,0,WIN_W-ROAD_RIGHT-8,  115,panelBg);
+    outR(5,5,ROAD_LEFT-18,105,(Color){80,220,255,150});
+    outR(ROAD_RIGHT+13,5,WIN_W-ROAD_RIGHT-23,105,(Color){255,220,80,150});
 
     Color yellow={255,220,0,255},white={255,255,255,255};
     Color green={100,255,100,255},red={220,0,0,255};
@@ -429,6 +573,10 @@ static void drawHUD(void){
     renderText("SPEED", 6, 58, yellow, font);
     sprintf(buf,"%d km/h",gameSpeed*22);
     renderText(buf,     6, 78, white,  font);
+    fillR(72,84,82,8,(Color){35,35,35,255});
+    int bar=(gameSpeed*82)/MAX_SPEED;
+    fillR(72,84,bar,8,(Color){255,190,0,255});
+    if(hudPulse>0) glowR(72,84,bar,8,(Color){255,240,80,(Uint8)(hudPulse*7)});
 
     renderText("LIVES",ROAD_RIGHT+10, 8,yellow,font);
     /* Heart icons for lives */
@@ -448,6 +596,10 @@ static void drawHUD(void){
     if(f){fscanf(f,"%d",&hi);fclose(f);}
     sprintf(buf,"BEST:%d",hi);
     renderText(buf,ROAD_RIGHT+10,60,green,font);
+    if(invFrames>0){
+        sprintf(buf,"SHIELD %02d",invFrames/10);
+        renderText(buf,ROAD_RIGHT+10,84,(Color){120,230,255,255},font);
+    }
 }
 
 /* ══════════════════════════════════════════════
@@ -464,7 +616,7 @@ static void saveHighScore(int s){
    ══════════════════════════════════════════════ */
 static void resetGame(void){
     score=0; lives=MAX_LIVES; gameSpeed=INITIAL_SPEED;
-    invFrames=0; roadOff=0.0f;
+    invFrames=0; roadOff=0.0f; shakeFrames=0; hudPulse=0;
     player.x    =(float)laneX(1);
     player.y    =(float)(WIN_H-CAR_H-20);
     player.speed= PLAYER_SPEED;
@@ -476,6 +628,7 @@ static void resetGame(void){
         spawnEnemy(i);
     }
     for(int i=0;i<MAX_PARTICLES;i++) sparks[i].life=0;
+    resetSpeedLines();
 }
 
 /* ══════════════════════════════════════════════
@@ -488,28 +641,35 @@ static void titleScreen(void){
             if(e.type==SDL_QUIT){running=0;return;}
             if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_RETURN) return;
         }
+        frameNo++;
+        roadOff+=3.2f;
+        updateSpeedLines();
         /* Dark gradient */
         for(int y=0;y<WIN_H;y++){
-            int v=18+(int)(y*0.12f); if(v>72)v=72;
-            SDL_SetRenderDrawColor(ren,0,0,v,255);
+            int v=20+(int)(y*0.15f); if(v>86)v=86;
+            SDL_SetRenderDrawColor(ren,2,6,v,255);
             SDL_RenderDrawLine(ren,0,y,WIN_W,y);
         }
         /* Road preview */
         fillR(ROAD_LEFT,0,ROAD_W,WIN_H,(Color){55,55,55,255});
-        for(int y=0;y<WIN_H;y+=54){
+        for(int y=(int)roadOff%54-54;y<WIN_H;y+=54){
+            glowR(ROAD_LEFT+LANE_W-2,    y,4,36,(Color){255,255,255,65});
+            glowR(ROAD_LEFT+LANE_W*2-2,  y,4,36,(Color){255,255,255,65});
             fillR(ROAD_LEFT+LANE_W-2,    y,4,36,(Color){255,255,255,255});
             fillR(ROAD_LEFT+LANE_W*2-2,  y,4,36,(Color){255,255,255,255});
         }
-        blendR(100,50,500,85,(Color){0,0,0,170});
+        drawSpeedLines();
+        blendR(82,44,536,98,(Color){0,0,0,185});
+        outR(92,54,516,78,(Color){0,220,255,170});
         Color yellow={255,220,0,255},white={255,255,255,255};
-        if(bigFont) renderCentered("TURBO  ROAD",62,yellow,bigFont);
+        if(bigFont) renderCentered("TURBO  ROAD",58+pulse(frameNo,70,6),yellow,bigFont);
         renderCentered("SDL2 Car Racing Game",145,white,font);
 
         /* Three demo cars in each lane */
         Car d; d.active=1; d.speed=0;
-        d.x=(float)laneX(0); d.y=200; d.body=(Color){220,0,0,255};   drawCar(&d,0);
-        d.x=(float)laneX(1); d.y=200; d.body=(Color){0,210,255,255}; drawCar(&d,1);
-        d.x=(float)laneX(2); d.y=200; d.body=(Color){100,180,0,255}; drawCar(&d,0);
+        d.x=(float)laneX(0); d.y=200+pulse(frameNo,50,12); d.body=(Color){220,0,0,255};   drawCar(&d,0);
+        d.x=(float)laneX(1); d.y=210-pulse(frameNo,46,10); d.body=(Color){0,210,255,255}; drawCar(&d,1);
+        d.x=(float)laneX(2); d.y=198+pulse(frameNo+20,54,12); d.body=(Color){100,180,0,255}; drawCar(&d,0);
 
         renderCentered("Controls:",                         295,yellow,font);
         renderCentered("LEFT / RIGHT arrows  =  steer",    317,white, font);
@@ -540,16 +700,20 @@ static int gameOverScreen(void){
                 if(e.key.keysym.sym==SDLK_ESCAPE){running=0;return 0;}
             }
         }
-        SDL_SetRenderDrawColor(ren,8,8,8,255); SDL_RenderClear(ren);
+        frameNo++;
+        SDL_SetRenderDrawColor(ren,8,8,12,255); SDL_RenderClear(ren);
+        for(int y=0;y<WIN_H;y+=12)
+            blendR(0,y+pulse(frameNo,80,10),WIN_W,2,(Color){255,40,40,35});
         updateParticles(); drawParticles();
-        blendR(120,70,460,310,(Color){0,0,0,215});
+        blendR(104,58,492,335,(Color){0,0,0,220});
+        outR(114,68,472,315,(Color){255,80,80,170});
         Color red={220,0,0,255},yellow={255,220,0,255};
         Color white={255,255,255,255},green={100,255,100,255};
-        if(bigFont) renderCentered("GAME  OVER",85,red,bigFont);
+        if(bigFont) renderCentered("GAME  OVER",82+pulse(frameNo,50,5),red,bigFont);
         char buf[64];
         sprintf(buf,"Your Score :  %d",score); renderCentered(buf,190,white,font);
         sprintf(buf,"Best Score :  %d",hi);    renderCentered(buf,218,yellow,font);
-        if(score>0&&score>=hi) renderCentered("★  NEW HIGH SCORE!  ★",250,yellow,font);
+        if(score>0&&score>=hi) renderCentered("NEW HIGH SCORE!",250,yellow,font);
         renderCentered("R      =   Play Again",305,green,font);
         renderCentered("ESC  =   Quit",         331,white,font);
         if((blink/28)%2==0) renderCentered("Better luck next time!",372,red,font);
@@ -577,6 +741,7 @@ int main(int argc,char *argv[]){
         bigFont=TTF_OpenFont(fp[i],44);
     }
 
+    resetSpeedLines();
     titleScreen();
 
     /* Outer loop – one iteration per game round */
@@ -589,6 +754,7 @@ int main(int argc,char *argv[]){
             Uint32 now=SDL_GetTicks();
             if(now-last<FRAME_MS){SDL_Delay(1);continue;}
             last=now;
+            frameNo++;
 
             /* ── INPUT ── */
             SDL_Event ev;
@@ -607,8 +773,13 @@ int main(int argc,char *argv[]){
             /* ── UPDATE ── */
             roadOff+=(float)gameSpeed*0.85f;
             updateEnemies();
+            updateSpeedLines();
+            if(gameSpeed>=3 || keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_RIGHT])
+                spawnExhaust();
             updateParticles();
             if(invFrames>0) invFrames--;
+            if(shakeFrames>0) shakeFrames--;
+            if(hudPulse>0) hudPulse--;
 
             /* ── COLLISION DETECTION ──
                Uses AABB that covers the entire car INCLUDING side wheels.
@@ -622,6 +793,7 @@ int main(int argc,char *argv[]){
                         /* 1) spawn sparks at impact point */
                         spawnExplosion((int)(player.x+CAR_W/2),
                                        (int)(player.y+CAR_H/2));
+                        shakeFrames=16;
                         /* 2) remove the enemy that was hit */
                         enemies[i].active=0;
                         /* 3) deduct one life */
@@ -630,7 +802,7 @@ int main(int argc,char *argv[]){
                         if(lives<=0){
                             /* Show crash frame briefly, then game over */
                             SDL_RenderClear(ren);
-                            drawBackground(); drawRoad();
+                            drawBackground(); drawSpeedLines(); drawRoad();
                             for(int j=0;j<MAX_ENEMIES;j++) drawCar(&enemies[j],0);
                             drawCar(&player,1);
                             drawParticles(); drawHUD();
@@ -647,11 +819,19 @@ int main(int argc,char *argv[]){
 
             /* ── RENDER ── */
             SDL_RenderClear(ren);
+            SDL_Rect vp={0,0,WIN_W,WIN_H};
+            if(shakeFrames>0){
+                vp.x=(rand()%9)-4;
+                vp.y=(rand()%7)-3;
+            }
+            SDL_RenderSetViewport(ren,&vp);
             drawBackground();
+            drawSpeedLines();
             drawRoad();
             for(int i=0;i<MAX_ENEMIES;i++) drawCar(&enemies[i],0);
             drawCar(&player,1);
             drawParticles();
+            SDL_RenderSetViewport(ren,NULL);
             drawHUD();
             SDL_RenderPresent(ren);
         }
