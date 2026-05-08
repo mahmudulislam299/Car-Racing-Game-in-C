@@ -463,41 +463,66 @@ static void drawSpeedLines(void){
    Sky, wide grass strips, road shoulders, trees
    ══════════════════════════════════════════════ */
 static void drawBackground(void){
+    int cloudShift=(int)(roadOff*0.04f)%WIN_W;
+    int hillShift=(int)(roadOff*0.015f)%WIN_W;
+
+    /* Calm morning sky */
     for(int y=0;y<WIN_H;y+=2){
-        Uint8 r=(Uint8)(55+y/8), g=(Uint8)(135+y/7), b=(Uint8)(218+y/20);
+        Uint8 r=(Uint8)(96+y/12), g=(Uint8)(166+y/13), b=(Uint8)(224+y/34);
         fillR(0,y,WIN_W,2,(Color){r,g,b,255});
     }
 
-    circle2D(92,72,38,(Color){255,226,130,210});
-    circle2D(92,72,24,(Color){255,246,190,255});
+    circle2D(105,72,30,(Color){255,224,145,170});
+    circle2D(105,72,18,(Color){255,242,198,235});
 
+    /* Very slow cloud banks */
+    for(int i=0;i<4;i++){
+        int cx=(i*230-cloudShift+WIN_W)%WIN_W;
+        int cy=34+(i%2)*34;
+        blendR(cx,cy,116,13,(Color){255,255,255,82});
+        blendR(cx+26,cy-9,70,16,(Color){255,255,255,70});
+        blendR(cx+82,cy+5,58,10,(Color){255,255,255,52});
+    }
+
+    /* Soft distant hills, almost fixed to the horizon */
+    for(int x=-220-hillShift;x<WIN_W+240;x+=170){
+        tri2D(x,HORIZON_Y+22,x+96,70+((x+11)&18),x+205,HORIZON_Y+22,(Color){91,131,128,245});
+        tri2D(x+46,HORIZON_Y+22,x+142,86+((x+23)&16),x+260,HORIZON_Y+22,(Color){75,118,111,245});
+    }
+    for(int x=-120-(hillShift/2);x<WIN_W+180;x+=150){
+        tri2D(x,HORIZON_Y+44,x+84,104+((x+19)&16),x+190,HORIZON_Y+44,(Color){48,112,82,255});
+        tri2D(x+78,HORIZON_Y+44,x+154,113+((x+3)&14),x+250,HORIZON_Y+44,(Color){39,96,72,255});
+    }
+
+    /* Field with subtle bands, not scrolling clutter */
+    fillR(0,HORIZON_Y+18,WIN_W,WIN_H-HORIZON_Y-18,(Color){31,128,59,255});
+    blendR(0,HORIZON_Y+40,WIN_W,22,(Color){90,168,74,95});
+    blendR(0,HORIZON_Y+82,WIN_W,18,(Color){21,101,48,80});
+
+    /* Small village held near the horizon so it feels distant and realistic */
+    int villageX=74-(hillShift/5);
+    for(int i=0;i<5;i++){
+        int x=villageX+i*92;
+        fillR(x,HORIZON_Y+29,44,24,(Color){205,184,142,255});
+        tri2D(x-5,HORIZON_Y+29,x+22,HORIZON_Y+14,x+49,HORIZON_Y+29,(Color){132,65,52,255});
+        fillR(x+9,HORIZON_Y+39,8,14,(Color){92,66,46,255});
+        fillR(x+25,HORIZON_Y+35,9,7,(Color){132,180,205,255});
+    }
+
+    /* Fence line and tree clusters, slow enough not to distract */
+    int fenceShift=(int)(roadOff*0.12f)%80;
+    for(int x=-80-fenceShift;x<WIN_W+80;x+=80){
+        fillR(x,HORIZON_Y+86,54,3,(Color){196,176,128,230});
+        fillR(x+8,HORIZON_Y+75,4,22,(Color){148,106,67,255});
+        fillR(x+44,HORIZON_Y+75,4,22,(Color){148,106,67,255});
+    }
     for(int i=0;i<7;i++){
-        int cx=(i*142-(frameNo/4)%170+WIN_W)%WIN_W;
-        int cy=24+(i%3)*24;
-        blendR(cx,cy,70,12,(Color){255,255,255,105});
-        blendR(cx+20,cy-8,48,16,(Color){255,255,255,86});
-        blendR(cx+54,cy+4,38,9,(Color){255,255,255,68});
-    }
-
-    int offFar=(int)(roadOff*0.10f)%240;
-    for(int x=-240-offFar;x<WIN_W+240;x+=120){
-        tri2D(x,150,x+70,62+(x&31),x+160,150,(Color){76,118,132,255});
-        tri2D(x+40,150,x+112,84+((x+13)&27),x+210,150,(Color){66,104,124,255});
-        tri2D(x+48,104+((x+13)&27),x+112,84+((x+13)&27),x+82,112+((x+13)&20),(Color){228,239,238,230});
-    }
-
-    int offNear=(int)(roadOff*0.22f)%260;
-    for(int x=-260-offNear;x<WIN_W+260;x+=130){
-        tri2D(x,190,x+90,88+((x+37)&39),x+190,190,(Color){38,105,84,255});
-        tri2D(x+82,190,x+160,106+((x+5)&35),x+250,190,(Color){30,91,75,255});
-    }
-
-    fillR(0,HORIZON_Y,WIN_W,WIN_H-HORIZON_Y,(Color){22,118,54,255});
-    for(int y=(int)(roadOff*0.55f)%42-42;y<WIN_H;y+=42){
-        if(y>HORIZON_Y){
-            fillR(0,y,WIN_W,5,(Color){40,158,67,255});
-            fillR(0,y+18,WIN_W,3,(Color){17,101,43,255});
-        }
+        int tx=(i*118-((int)(roadOff*0.10f)%130)+WIN_W)%WIN_W;
+        int ty=HORIZON_Y+54+(i%2)*22;
+        fillR(tx,ty+18,7,28,(Color){104,75,48,255});
+        circle2D(tx+4,ty+9,17,(Color){31,105,55,255});
+        circle2D(tx-8,ty+18,13,(Color){24,87,47,255});
+        circle2D(tx+16,ty+18,13,(Color){42,127,65,255});
     }
 
     for(int y=HORIZON_Y+(int)(roadOff*1.5f)%82-82;y<WIN_H;y+=82){
@@ -511,14 +536,15 @@ static void drawBackground(void){
         fillR(rx,y+38+scale*3,scale,scale*2,(Color){220,40,35,255});
     }
 
-    Color oldFlowers[3]={{255,225,80,255},{255,80,150,255},{190,235,255,255}};
-    for(int i=0;i<26;i++){
-        int fy=(int)(HORIZON_Y+24+i*31+roadOff*0.8f)%WIN_H;
+    Color oldFlowers[3]={{240,214,90,255},{230,120,150,255},{196,224,235,255}};
+    for(int i=0;i<14;i++){
+        int fy=(int)(HORIZON_Y+72+i*37+roadOff*0.45f)%WIN_H;
         if(fy<HORIZON_Y) fy+=HORIZON_Y;
         int fx=(i%2)?(18+(i*37)%150):(530+(i*29)%145);
         fillR(fx,fy,3,3,oldFlowers[i%3]);
     }
     return;
+#if 0
     /* Sky gradient */
     for(int y=0;y<WIN_H;y+=2){
         Uint8 r=(Uint8)(72+y/7), g=(Uint8)(150+y/9), b=(Uint8)(215+y/18);
@@ -587,6 +613,7 @@ static void drawBackground(void){
         int fx=(i%2)?(20+(i*29)%(ROAD_LEFT-42)):(ROAD_RIGHT+22+(i*31)%(WIN_W-ROAD_RIGHT-45));
         fillR(fx,fy,3,3,flowers[i%3]);
     }
+#endif
 }
 
 /* ══════════════════════════════════════════════
