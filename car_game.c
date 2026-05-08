@@ -137,8 +137,22 @@ static float roadTAtZ(float z){
 }
 static float roadCurveAtZ(float z){
     float t=roadTAtZ(z);
-    float drift=(float)(((int)(roadOff*0.03f)%220)-110)/110.0f;
-    return t*t*(2.8f*t-1.25f) + t*t*1.25f*drift;
+    float d=-z + roadOff*0.16f;
+    int seg=(int)(d/52.0f);
+    float u=(d-(float)seg*52.0f)/52.0f;
+    float smooth=u*u*(3.0f-2.0f*u);
+    float keys[9]={0.0f,0.0f,2.7f,2.7f,-2.4f,2.1f,-1.0f,0.0f,0.0f};
+    int k=seg%8; if(k<0) k+=8;
+    float a=keys[k], b=keys[k+1];
+    return (a+(b-a)*smooth)*t;
+}
+static float roadLean(void){
+    float nearCurve=roadCurveAtZ(-12.0f);
+    float farCurve=roadCurveAtZ(-70.0f);
+    float lean=(farCurve-nearCurve)*2.2f;
+    if(lean>7.0f) lean=7.0f;
+    if(lean<-7.0f) lean=-7.0f;
+    return lean;
 }
 static float roadHalfAtZ(float z){
     float t=roadTAtZ(z);
@@ -164,6 +178,7 @@ static void use3D(void){
     glFrustum(-aspect*0.075,aspect*0.075,-0.055,0.105,0.1,140.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    glRotatef(roadLean(),0.0f,0.0f,1.0f);
     glRotatef(9.0f,1.0f,0.0f,0.0f);
     glTranslatef(-playerLanePos()*0.14f,-3.0f,0.4f);
 }
