@@ -204,6 +204,7 @@ static void circle2D(int cx,int cy,int r,Color c){
     glEnd();
 }
 static void glowR(int x,int y,int w,int h,Color c);
+static void renderText(const char *t,int x,int y,Color c,TTF_Font *f);
 static void drawHeart2D(int x,int y,int s,Color c){
     Color shine={255,170,180,190};
     glowR(x+2,y+2,s*2,s*2,(Color){255,35,70,85});
@@ -211,6 +212,47 @@ static void drawHeart2D(int x,int y,int s,Color c){
     circle2D(x+s+s/2,y+s/2,s/2,c);
     tri2D(x,y+s/2,x+s*2,y+s/2,x+s,y+s*2,c);
     circle2D(x+s/2-1,y+s/2-1,s/5,shine);
+}
+static void drawHouse2D(int x,int y,int w,int h,Color wall,Color roof){
+    blendR(x+3,y+h,w,5,(Color){0,0,0,35});
+    fillR(x,y,w,h,wall);
+    fillR(x+2,y+2,w-4,3,shade(wall,1.16f));
+    tri2D(x-6,y,x+w/2,y-h/2,x+w+6,y,roof);
+    fillR(x+w/2-4,y+h-13,8,13,(Color){92,62,42,255});
+    fillR(x+8,y+8,8,7,(Color){124,178,205,255});
+    fillR(x+w-17,y+8,8,7,(Color){124,178,205,255});
+    fillR(x+w-10,y-h/2+4,5,12,(Color){116,76,50,255});
+    blendR(x+w-8,y-h/2,18,7,(Color){235,238,232,50});
+}
+static void drawShop2D(int x,int y,int w,int h,Color wall){
+    blendR(x+3,y+h,w,5,(Color){0,0,0,35});
+    fillR(x,y,w,h,wall);
+    fillR(x,y+7,w,6,(Color){178,46,48,255});
+    fillR(x+5,y+7,8,6,(Color){244,230,178,255});
+    fillR(x+21,y+7,8,6,(Color){244,230,178,255});
+    fillR(x+w-15,y+7,8,6,(Color){244,230,178,255});
+    fillR(x+w/2-5,y+h-15,10,15,(Color){70,78,82,255});
+    fillR(x+7,y+18,10,8,(Color){110,174,205,255});
+    fillR(x+w-17,y+18,10,8,(Color){110,174,205,255});
+    fillR(x+6,y-9,w-12,7,(Color){60,65,70,255});
+    renderText("PIT",x+12,y-10,(Color){255,235,95,255},font);
+}
+static void drawBarn2D(int x,int y,int w,int h){
+    blendR(x+4,y+h,w,5,(Color){0,0,0,34});
+    fillR(x,y,w,h,(Color){166,72,54,255});
+    tri2D(x-5,y,x+w/2,y-h/2,x+w+5,y,(Color){96,70,58,255});
+    fillR(x+w/2-7,y+h-16,14,16,(Color){92,52,38,255});
+    line(x+w/2-7,y+h-16,x+w/2+7,y+h,(Color){210,166,120,255});
+    line(x+w/2+7,y+h-16,x+w/2-7,y+h,(Color){210,166,120,255});
+    fillR(x+8,y+8,8,6,(Color){235,210,145,255});
+}
+static void drawTree2D(int x,int y,int s){
+    fillR(x-s/8,y+s/2,s/4,s,(Color){104,70,42,255});
+    fillR(x-s/14,y+s/3,s/7,s,(Color){137,92,52,255});
+    circle2D(x,y+s/3,s/2,(Color){31,105,54,255});
+    circle2D(x-s/3,y+s/2,s/3,(Color){23,86,46,255});
+    circle2D(x+s/3,y+s/2,s/3,(Color){44,130,66,255});
+    circle2D(x,y+s/8,s/3,(Color){53,143,74,255});
 }
 static void glowR(int x,int y,int w,int h,Color c){
     glEnable(GL_BLEND);
@@ -466,22 +508,32 @@ static void drawBackground(void){
     int cloudShift=(int)(roadOff*0.04f)%WIN_W;
     int hillShift=(int)(roadOff*0.015f)%WIN_W;
 
-    /* Calm morning sky */
+    /* Calm morning sky with warmer horizon haze */
     for(int y=0;y<WIN_H;y+=2){
-        Uint8 r=(Uint8)(96+y/12), g=(Uint8)(166+y/13), b=(Uint8)(224+y/34);
+        Uint8 r=(Uint8)(76 + y/9);
+        Uint8 g=(Uint8)(145 + y/11);
+        Uint8 b=(Uint8)(222 - y/38);
         fillR(0,y,WIN_W,2,(Color){r,g,b,255});
     }
+    for(int y=HORIZON_Y-34;y<HORIZON_Y+18;y+=2){
+        Uint8 a=(Uint8)(60-((y-(HORIZON_Y-34))*40)/52);
+        blendR(0,y,WIN_W,2,(Color){255,214,150,a});
+    }
 
-    circle2D(105,72,30,(Color){255,224,145,170});
-    circle2D(105,72,18,(Color){255,242,198,235});
+    circle2D(105,72,38,(Color){255,221,135,120});
+    circle2D(105,72,23,(Color){255,239,190,230});
+    circle2D(105,72,12,(Color){255,250,216,255});
 
-    /* Very slow cloud banks */
+    /* Very slow cloud banks with rounded tops and soft gray undersides */
     for(int i=0;i<4;i++){
         int cx=(i*230-cloudShift+WIN_W)%WIN_W;
         int cy=34+(i%2)*34;
-        blendR(cx,cy,116,13,(Color){255,255,255,82});
-        blendR(cx+26,cy-9,70,16,(Color){255,255,255,70});
-        blendR(cx+82,cy+5,58,10,(Color){255,255,255,52});
+        blendR(cx+8,cy+16,118,10,(Color){190,205,216,42});
+        circle2D(cx+18,cy+11,17,(Color){255,255,255,92});
+        circle2D(cx+42,cy+4,23,(Color){255,255,255,108});
+        circle2D(cx+72,cy+8,20,(Color){250,253,255,96});
+        circle2D(cx+99,cy+14,15,(Color){244,249,255,82});
+        blendR(cx+18,cy+19,98,8,(Color){214,225,232,45});
     }
 
     /* Soft distant hills, almost fixed to the horizon */
@@ -501,13 +553,19 @@ static void drawBackground(void){
 
     /* Small village held near the horizon so it feels distant and realistic */
     int villageX=74-(hillShift/5);
-    for(int i=0;i<5;i++){
-        int x=villageX+i*92;
-        fillR(x,HORIZON_Y+29,44,24,(Color){205,184,142,255});
-        tri2D(x-5,HORIZON_Y+29,x+22,HORIZON_Y+14,x+49,HORIZON_Y+29,(Color){132,65,52,255});
-        fillR(x+9,HORIZON_Y+39,8,14,(Color){92,66,46,255});
-        fillR(x+25,HORIZON_Y+35,9,7,(Color){132,180,205,255});
+    drawHouse2D(villageX,       HORIZON_Y+31,38,22,(Color){204,187,150,255},(Color){118,72,56,255});
+    drawBarn2D (villageX+70,    HORIZON_Y+34,46,26);
+    drawShop2D (villageX+145,   HORIZON_Y+30,54,30,(Color){198,178,126,255});
+    drawHouse2D(villageX+238,   HORIZON_Y+35,34,20,(Color){186,198,168,255},(Color){82,94,98,255});
+    drawHouse2D(villageX+310,   HORIZON_Y+28,48,28,(Color){218,190,142,255},(Color){148,76,52,255});
+    drawBarn2D (villageX+392,   HORIZON_Y+37,38,22);
+    for(int i=0;i<4;i++){
+        int px=villageX+52+i*105;
+        fillR(px,HORIZON_Y+47,4,18,(Color){88,76,58,255});
+        circle2D(px+2,HORIZON_Y+45,5,(Color){255,214,94,180});
     }
+    tri2D(villageX+212,HORIZON_Y+21,villageX+212,HORIZON_Y+39,villageX+238,HORIZON_Y+30,(Color){235,62,68,255});
+    fillR(villageX+210,HORIZON_Y+21,3,25,(Color){72,72,72,255});
 
     /* Fence line and tree clusters, slow enough not to distract */
     int fenceShift=(int)(roadOff*0.12f)%80;
@@ -519,21 +577,7 @@ static void drawBackground(void){
     for(int i=0;i<7;i++){
         int tx=(i*118-((int)(roadOff*0.10f)%130)+WIN_W)%WIN_W;
         int ty=HORIZON_Y+54+(i%2)*22;
-        fillR(tx,ty+18,7,28,(Color){104,75,48,255});
-        circle2D(tx+4,ty+9,17,(Color){31,105,55,255});
-        circle2D(tx-8,ty+18,13,(Color){24,87,47,255});
-        circle2D(tx+16,ty+18,13,(Color){42,127,65,255});
-    }
-
-    for(int y=HORIZON_Y+(int)(roadOff*1.5f)%82-82;y<WIN_H;y+=82){
-        if(y<HORIZON_Y+12) continue;
-        int scale=2+((y-HORIZON_Y)*8)/(WIN_H-HORIZON_Y);
-        int lx=roadLeftAt(y)-20-scale;
-        int rx=roadRightAt(y)+12;
-        fillR(lx,y,scale,scale*5,(Color){245,245,235,255});
-        fillR(lx,y+scale*3,scale,scale*2,(Color){220,40,35,255});
-        fillR(rx,y+38,scale,scale*5,(Color){245,245,235,255});
-        fillR(rx,y+38+scale*3,scale,scale*2,(Color){220,40,35,255});
+        drawTree2D(tx,ty,34+(i%2)*6);
     }
 
     Color oldFlowers[3]={{240,214,90,255},{230,120,150,255},{196,224,235,255}};
@@ -620,6 +664,7 @@ static void drawBackground(void){
    drawRoad()
    Road surface, yellow kerbs, scrolling dashes
    ══════════════════════════════════════════════ */
+static void box3D(float x,float y,float z,float sx,float sy,float sz,Color c);
 static void drawRoad(void){
     use3D();
 
@@ -643,6 +688,32 @@ static void drawRoad(void){
     glVertex3f(-4.1f,0.0f,-125.0f);
     glEnd();
 
+    /* Subtle asphalt grain and tire paths */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    for(int i=0;i<34;i++){
+        float z=-5.0f-(float)((i*11+(int)(roadOff*0.22f))%118);
+        float lane=((i*37)%100)/100.0f;
+        float x=-3.55f+lane*7.1f;
+        float w=0.10f+(float)(i%5)*0.025f;
+        glBegin(GL_QUADS);
+        glColor4ub(255,255,255,(GLubyte)(13+(i%4)*5));
+        glVertex3f(x,0.052f,z); glVertex3f(x+w,0.052f,z);
+        glVertex3f(x+w,0.052f,z-0.42f); glVertex3f(x,0.052f,z-0.42f);
+        glEnd();
+    }
+    for(int side=-1;side<=1;side+=2){
+        glBegin(GL_QUADS);
+        glColor4ub(0,0,0,45);
+        glVertex3f(side*1.55f,0.053f,-3.2f);
+        glVertex3f(side*1.82f,0.053f,-3.2f);
+        glColor4ub(0,0,0,12);
+        glVertex3f(side*1.62f,0.053f,-124.0f);
+        glVertex3f(side*1.42f,0.053f,-124.0f);
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+
     /* Shoulders */
     glBegin(GL_QUADS);
     glColor3ub(115,105,88);
@@ -663,6 +734,18 @@ static void drawRoad(void){
     glVertex3f( 4.55f,0.035f,-2.6f); glVertex3f( 3.95f,0.035f,-125.0f);
     glEnd();
 
+    /* Low guardrail glints near the useful driving area */
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+    glColor3ub(180,188,186);
+    glVertex3f(-5.45f,0.32f,-5.0f); glVertex3f(-4.55f,0.22f,-54.0f);
+    glVertex3f( 5.45f,0.32f,-5.0f); glVertex3f( 4.55f,0.22f,-54.0f);
+    glEnd();
+    for(float z=-7.0f;z>-54.0f;z-=8.0f){
+        box3D(-5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
+        box3D( 5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
+    }
+
     /* Lane divider dashes moving in world space */
     float off=(float)((int)(roadOff*0.10f)%12);
     for(float z=-4.0f+off;z>-122.0f;z-=12.0f){
@@ -678,9 +761,9 @@ static void drawRoad(void){
         }
     }
 
-    /* Red/white rumble strip blocks */
+    /* Muted shoulder blocks */
     for(float z=-3.2f+off;z>-120.0f;z-=6.0f){
-        Color c=((int)(-z/6.0f)%2)?(Color){230,30,28,255}:(Color){240,240,230,255};
+        Color c=((int)(-z/6.0f)%2)?(Color){92,92,86,255}:(Color){128,124,108,255};
         glColor3ub(c.r,c.g,c.b);
         glBegin(GL_QUADS);
         glVertex3f(-4.7f,0.05f,z); glVertex3f(-4.25f,0.05f,z);
@@ -774,6 +857,11 @@ static void drawCar(Car *c,int isPlayer){
     box3D(carX+0.28f,0.23f+carBob,carZ-0.91f,0.18f,0.07f,0.04f,(Color){24,24,26,255});
     box3D(carX-0.48f,0.24f+carBob,carZ,0.035f,0.11f,1.10f,shade(body,0.58f));
     box3D(carX+0.48f,0.24f+carBob,carZ,0.035f,0.11f,1.10f,shade(body,0.58f));
+    box3D(carX,0.46f*s+carBob,carZ-0.62f*s,0.20f*s,0.035f*s,0.58f*s,shade(body,1.35f));
+    box3D(carX,0.22f*s+carBob,carZ-0.985f*s,0.34f*s,0.07f*s,0.035f*s,(Color){232,232,210,255});
+    box3D(carX,0.20f*s+carBob,carZ+0.985f*s,0.32f*s,0.06f*s,0.035f*s,(Color){235,232,190,255});
+    box3D(carX-0.52f*s,0.33f*s+carBob,carZ-0.42f*s,0.055f*s,0.12f*s,0.28f*s,(Color){40,80,108,255});
+    box3D(carX+0.52f*s,0.33f*s+carBob,carZ-0.42f*s,0.055f*s,0.12f*s,0.28f*s,(Color){40,80,108,255});
 
     drawWheel3D(carX,carZ,-1.0f);
     drawWheel3D(carX,carZ, 1.0f);
