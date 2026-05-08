@@ -1,15 +1,25 @@
 /*
  =============================================================
    TURBO ROAD  -  SDL2 Car Racing Game in C
-   Build: gcc car_game.c -o car_game -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
+   Build: gcc car_game.c -o car_game -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lopengl32
  =============================================================
 */
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_opengl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
+#define SDL_RenderClear(renderer) glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+#define SDL_RenderPresent(renderer) SDL_GL_SwapWindow(win)
+#define SDL_DestroyRenderer(renderer) ((void)0)
+#define SDL_RenderSetViewport(renderer, rect) do { \
+    const SDL_Rect *_vp_rect=(const SDL_Rect *)(rect); \
+    if(_vp_rect) glViewport(_vp_rect->x, WIN_H-_vp_rect->y-_vp_rect->h, _vp_rect->w, _vp_rect->h); \
+    else glViewport(0,0,WIN_W,WIN_H); \
+} while(0)
 
 /* ─── Window & timing ─── */
 #define WIN_W       700
@@ -23,6 +33,9 @@
 #define ROAD_W       (ROAD_RIGHT - ROAD_LEFT)   /* 350 px total road */
 #define NUM_LANES    3
 #define LANE_W       (ROAD_W / NUM_LANES)       /* 117 px per lane  */
+#define HORIZON_Y    132
+#define ROAD_NEAR_W  500
+#define ROAD_FAR_W    72
 
 /* ─── Car dimensions (thinner than before) ─── */
 #define CAR_W        32    /* body width  – slim fit in lane */
@@ -79,6 +92,7 @@ typedef struct {
    ══════════════════════════════════════════════ */
 static SDL_Window   *win     = NULL;
 static SDL_Renderer *ren     = NULL;
+static SDL_GLContext glCtx   = NULL;
 static TTF_Font     *font    = NULL;
 static TTF_Font     *bigFont = NULL;
 
@@ -106,22 +120,61 @@ static Color enemyCols[6] = {
     {  0,160,220,255},   /* sky blue*/
 };
 
+static float playerLanePos(void){
+    return ((player.x-(float)ROAD_LEFT)/(float)ROAD_W)*6.0f-3.0f;
+}
+static float carLanePos(Car *c){
+    return ((c->x-(float)ROAD_LEFT)/(float)ROAD_W)*6.0f-3.0f;
+}
+static float carDepth(Car *c){
+    return -8.0f - ((float)WIN_H-c->y)*0.18f;
+}
+
 /* ══════════════════════════════════════════════
    DRAW PRIMITIVES
    ══════════════════════════════════════════════ */
+static void use2D(void){
+    glDisable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.0,WIN_W,WIN_H,0.0,-1.0,1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+static void use3D(void){
+    float aspect=(float)WIN_W/(float)WIN_H;
+    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glFrustum(-aspect*0.08,aspect*0.08,-0.08,0.08,0.1,160.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glRotatef(13.0f,1.0f,0.0f,0.0f);
+    glTranslatef(-playerLanePos()*0.16f,-2.0f,-1.0f);
+}
 static void setCol(SDL_Renderer *r, Color c){
-    SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
+    (void)r;
+    glColor4ub(c.r,c.g,c.b,c.a);
 }
 static void fillR(int x,int y,int w,int h,Color c){
-    setCol(ren,c); SDL_Rect r={x,y,w,h}; SDL_RenderFillRect(ren,&r);
+    if(w<=0||h<=0) return;
+    use2D(); setCol(ren,c);
+    glBegin(GL_QUADS);
+    glVertex2i(x,y); glVertex2i(x+w,y); glVertex2i(x+w,y+h); glVertex2i(x,y+h);
+    glEnd();
 }
 static void outR(int x,int y,int w,int h,Color c){
-    setCol(ren,c); SDL_Rect r={x,y,w,h}; SDL_RenderDrawRect(ren,&r);
+    if(w<=0||h<=0) return;
+    use2D(); setCol(ren,c);
+    glBegin(GL_LINE_LOOP);
+    glVertex2i(x,y); glVertex2i(x+w,y); glVertex2i(x+w,y+h); glVertex2i(x,y+h);
+    glEnd();
 }
 static void blendR(int x,int y,int w,int h,Color c){
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     fillR(x,y,w,h,c);
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+    glDisable(GL_BLEND);
 }
 static Color shade(Color c,float k){
     Color o={(Uint8)(c.r*k>255?255:c.r*k),
@@ -130,21 +183,46 @@ static Color shade(Color c,float k){
     return o;
 }
 static void line(int x1,int y1,int x2,int y2,Color c){
-    setCol(ren,c); SDL_RenderDrawLine(ren,x1,y1,x2,y2);
+    use2D(); setCol(ren,c);
+    glBegin(GL_LINES);
+    glVertex2i(x1,y1); glVertex2i(x2,y2);
+    glEnd();
 }
 static void glowR(int x,int y,int w,int h,Color c){
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for(int i=3;i>0;i--){
         Color g=c; g.a=(Uint8)(c.a/(i+1));
-        SDL_Rect r={x-i*3,y-i*3,w+i*6,h+i*6};
-        SDL_RenderFillRect(ren,&r);
+        fillR(x-i*3,y-i*3,w+i*6,h+i*6,g);
     }
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+    glDisable(GL_BLEND);
 }
 static int pulse(int frame,int period,int amp){
     int p=frame%period;
     if(p>period/2) p=period-p;
     return (p*amp*2)/period;
+}
+static int roadWidthAt(int y){
+    if(y<=HORIZON_Y) return ROAD_FAR_W;
+    int dy=y-HORIZON_Y;
+    int range=WIN_H-HORIZON_Y;
+    int t=(dy*1000)/range;
+    return ROAD_FAR_W + ((ROAD_NEAR_W-ROAD_FAR_W)*t*t)/1000000;
+}
+static int roadCenterAt(int y){
+    int dy=y-HORIZON_Y;
+    int curve=(dy*dy)/1050;
+    return WIN_W/2 + curve;
+}
+static int roadLeftAt(int y){
+    return roadCenterAt(y)-roadWidthAt(y)/2;
+}
+static int roadRightAt(int y){
+    return roadCenterAt(y)+roadWidthAt(y)/2;
+}
+static int laneMarkerXAt(int y,int marker){
+    int left=roadLeftAt(y), w=roadWidthAt(y);
+    return left + (w*marker)/NUM_LANES;
 }
 
 /* ══════════════════════════════════════════════
@@ -154,10 +232,32 @@ static void renderText(const char *t,int x,int y,Color c,TTF_Font *f){
     if(!f) return;
     SDL_Color sc={c.r,c.g,c.b,c.a};
     SDL_Surface *s=TTF_RenderText_Blended(f,t,sc); if(!s) return;
-    SDL_Texture *tx=SDL_CreateTextureFromSurface(ren,s);
-    SDL_Rect d={x,y,s->w,s->h};
-    SDL_RenderCopy(ren,tx,NULL,&d);
-    SDL_DestroyTexture(tx); SDL_FreeSurface(s);
+    SDL_Surface *rgba=SDL_ConvertSurfaceFormat(s,SDL_PIXELFORMAT_ABGR8888,0);
+    SDL_FreeSurface(s);
+    if(!rgba) return;
+
+    GLuint tex=0;
+    glGenTextures(1,&tex);
+    glBindTexture(GL_TEXTURE_2D,tex);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,rgba->w,rgba->h,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba->pixels);
+
+    use2D();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_TEXTURE_2D);
+    glColor4ub(255,255,255,255);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0,0); glVertex2i(x,y);
+    glTexCoord2f(1,0); glVertex2i(x+rgba->w,y);
+    glTexCoord2f(1,1); glVertex2i(x+rgba->w,y+rgba->h);
+    glTexCoord2f(0,1); glVertex2i(x,y+rgba->h);
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glDeleteTextures(1,&tex);
+    SDL_FreeSurface(rgba);
 }
 static void renderCentered(const char *t,int y,Color c,TTF_Font *f){
     if(!f) return; int w,h; TTF_SizeText(f,t,&w,&h);
@@ -324,13 +424,14 @@ static void updateSpeedLines(void){
 }
 static void drawSpeedLines(void){
     if(gameSpeed<4) return;
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_BLEND);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     for(int i=0;i<MAX_SPEED_LINES;i++){
         line((int)speedLines[i].x,(int)speedLines[i].y,
              (int)speedLines[i].x,(int)speedLines[i].y+speedLines[i].len,
              speedLines[i].col);
     }
-    SDL_SetRenderDrawBlendMode(ren,SDL_BLENDMODE_NONE);
+    glDisable(GL_BLEND);
 }
 
 /* ══════════════════════════════════════════════
@@ -361,24 +462,24 @@ static void drawBackground(void){
 
     /* Grass strips (narrower now – road is wider) */
     Color gr={25,130,55,255};
-    fillR(0,0,ROAD_LEFT,WIN_H,gr);
-    fillR(ROAD_RIGHT,0,WIN_W-ROAD_RIGHT,WIN_H,gr);
+    fillR(0,HORIZON_Y,WIN_W,WIN_H-HORIZON_Y,gr);
 
     for(int y=(int)(roadOff*0.55f)%42-42;y<WIN_H;y+=42){
-        fillR(0,y,ROAD_LEFT-8,6,(Color){40,160,64,255});
-        fillR(ROAD_RIGHT+8,y+18,WIN_W-ROAD_RIGHT-8,6,(Color){40,160,64,255});
+        if(y>HORIZON_Y){
+            fillR(0,y,WIN_W,5,(Color){37,154,64,255});
+            fillR(0,y+18,WIN_W,3,(Color){18,110,45,255});
+        }
     }
 
-    /* Road shoulders */
-    Color sh={40,40,40,255};
-    fillR(ROAD_LEFT-8,0,8,WIN_H,sh);
-    fillR(ROAD_RIGHT, 0,8,WIN_H,sh);
-
-    for(int y=(int)(roadOff*1.2f)%76-76;y<WIN_H;y+=76){
-        fillR(ROAD_LEFT-19,y,8,20,(Color){245,245,245,255});
-        fillR(ROAD_LEFT-19,y+20,8,12,(Color){230,30,30,255});
-        fillR(ROAD_RIGHT+11,y+38,8,20,(Color){245,245,245,255});
-        fillR(ROAD_RIGHT+11,y+58,8,12,(Color){230,30,30,255});
+    for(int y=HORIZON_Y+(int)(roadOff*1.5f)%82-82;y<WIN_H;y+=82){
+        if(y<HORIZON_Y+12) continue;
+        int scale=2+((y-HORIZON_Y)*8)/(WIN_H-HORIZON_Y);
+        int lx=roadLeftAt(y)-20-scale;
+        int rx=roadRightAt(y)+12;
+        fillR(lx,y,scale,scale*5,(Color){245,245,235,255});
+        fillR(lx,y+scale*3,scale,scale*2,(Color){220,40,35,255});
+        fillR(rx,y+38,scale,scale*5,(Color){245,245,235,255});
+        fillR(rx,y+38+scale*3,scale,scale*2,(Color){220,40,35,255});
     }
 
     /* Scrolling trees (parallax – slower than road) */
@@ -413,35 +514,73 @@ static void drawBackground(void){
    Road surface, yellow kerbs, scrolling dashes
    ══════════════════════════════════════════════ */
 static void drawRoad(void){
-    fillR(ROAD_LEFT,0,ROAD_W,WIN_H,(Color){45,48,52,255});
-    for(int x=0;x<ROAD_W;x+=18){
-        Uint8 v=(Uint8)(42+(x%54));
-        fillR(ROAD_LEFT+x,0,18,WIN_H,(Color){v,v,v+3,255});
+    use3D();
+
+    /* Ground plane */
+    glBegin(GL_QUADS);
+    glColor3ub(18,95,45);
+    glVertex3f(-80.0f,-0.08f,-4.0f);
+    glVertex3f( 80.0f,-0.08f,-4.0f);
+    glColor3ub(8,55,35);
+    glVertex3f( 80.0f,-0.08f,-160.0f);
+    glVertex3f(-80.0f,-0.08f,-160.0f);
+    glEnd();
+
+    /* Actual 3D asphalt plane */
+    glBegin(GL_QUADS);
+    glColor3ub(62,64,68);
+    glVertex3f(-4.2f,0.0f,-4.0f);
+    glVertex3f( 4.2f,0.0f,-4.0f);
+    glColor3ub(28,30,34);
+    glVertex3f( 4.2f,0.0f,-155.0f);
+    glVertex3f(-4.2f,0.0f,-155.0f);
+    glEnd();
+
+    /* Shoulders */
+    glBegin(GL_QUADS);
+    glColor3ub(115,105,88);
+    glVertex3f(-5.1f,0.01f,-4.0f); glVertex3f(-4.2f,0.01f,-4.0f);
+    glColor3ub(72,70,62);
+    glVertex3f(-4.2f,0.01f,-155.0f); glVertex3f(-5.1f,0.01f,-155.0f);
+    glColor3ub(115,105,88);
+    glVertex3f(4.2f,0.01f,-4.0f); glVertex3f(5.1f,0.01f,-4.0f);
+    glColor3ub(72,70,62);
+    glVertex3f(5.1f,0.01f,-155.0f); glVertex3f(4.2f,0.01f,-155.0f);
+    glEnd();
+
+    /* Road edge lines */
+    glLineWidth(3.0f);
+    glBegin(GL_LINES);
+    glColor3ub(255,218,48);
+    glVertex3f(-4.0f,0.035f,-4.0f); glVertex3f(-4.0f,0.035f,-155.0f);
+    glVertex3f( 4.0f,0.035f,-4.0f); glVertex3f( 4.0f,0.035f,-155.0f);
+    glEnd();
+
+    /* Lane divider dashes moving in world space */
+    float off=(float)((int)(roadOff*0.10f)%12);
+    for(float z=-6.0f+off;z>-150.0f;z-=12.0f){
+        for(int lane=1;lane<NUM_LANES;lane++){
+            float x=-4.0f+(8.0f/NUM_LANES)*lane;
+            glBegin(GL_QUADS);
+            glColor3ub(245,245,235);
+            glVertex3f(x-0.045f,0.045f,z);
+            glVertex3f(x+0.045f,0.045f,z);
+            glVertex3f(x+0.045f,0.045f,z-5.2f);
+            glVertex3f(x-0.045f,0.045f,z-5.2f);
+            glEnd();
+        }
     }
 
-    /* Center shine and tire marks */
-    blendR(ROAD_LEFT+ROAD_W/2-50,0,100,WIN_H,(Color){255,255,255,18});
-    for(int y=(int)(roadOff*0.9f)%130-130;y<WIN_H;y+=130){
-        blendR(ROAD_LEFT+44,y,18,76,(Color){0,0,0,55});
-        blendR(ROAD_RIGHT-62,y+42,18,76,(Color){0,0,0,45});
-    }
-
-    /* Yellow kerb lines */
-    Color kerb={255,220,0,255};
-    glowR(ROAD_LEFT-4,0,5,WIN_H,(Color){255,190,0,70});
-    glowR(ROAD_RIGHT-1,0,5,WIN_H,(Color){255,190,0,70});
-    fillR(ROAD_LEFT-4,0,5,WIN_H,kerb);
-    fillR(ROAD_RIGHT-1,0,5,WIN_H,kerb);
-
-    /* Scrolling dashed lane dividers */
-    Color wh={255,255,255,255};
-    int dashH=36,gapH=22,period=dashH+gapH;
-    int off=(int)roadOff%period;
-    for(int y=-period+off;y<WIN_H;y+=period){
-        glowR(ROAD_LEFT+LANE_W-2,    y,4,dashH,(Color){255,255,255,80});
-        glowR(ROAD_LEFT+LANE_W*2-2,  y,4,dashH,(Color){255,255,255,80});
-        fillR(ROAD_LEFT+LANE_W-2,    y,4,dashH,wh);  /* divider 1 */
-        fillR(ROAD_LEFT+LANE_W*2-2,  y,4,dashH,wh);  /* divider 2 */
+    /* Red/white rumble strip blocks */
+    for(float z=-5.0f+off;z>-145.0f;z-=6.0f){
+        Color c=((int)(-z/6.0f)%2)?(Color){230,30,28,255}:(Color){240,240,230,255};
+        glColor3ub(c.r,c.g,c.b);
+        glBegin(GL_QUADS);
+        glVertex3f(-4.7f,0.05f,z); glVertex3f(-4.25f,0.05f,z);
+        glVertex3f(-4.25f,0.05f,z-3.0f); glVertex3f(-4.7f,0.05f,z-3.0f);
+        glVertex3f(4.25f,0.05f,z); glVertex3f(4.7f,0.05f,z);
+        glVertex3f(4.7f,0.05f,z-3.0f); glVertex3f(4.25f,0.05f,z-3.0f);
+        glEnd();
     }
 }
 
@@ -457,6 +596,28 @@ static void drawWheel(int wx,int wy,int ww,int wh){
     outR(wx,wy,ww,wh,(Color){0,0,0,255});
 }
 
+static void box3D(float x,float y,float z,float sx,float sy,float sz,Color c){
+    Color top=shade(c,1.28f), side=shade(c,0.72f), dark=shade(c,0.48f);
+    float x1=x-sx/2, x2=x+sx/2, y1=y, y2=y+sy, z1=z-sz/2, z2=z+sz/2;
+    glBegin(GL_QUADS);
+    glColor3ub(top.r,top.g,top.b);
+    glVertex3f(x1,y2,z1); glVertex3f(x2,y2,z1); glVertex3f(x2,y2,z2); glVertex3f(x1,y2,z2);
+    glColor3ub(c.r,c.g,c.b);
+    glVertex3f(x1,y1,z2); glVertex3f(x2,y1,z2); glVertex3f(x2,y2,z2); glVertex3f(x1,y2,z2);
+    glColor3ub(side.r,side.g,side.b);
+    glVertex3f(x2,y1,z1); glVertex3f(x2,y1,z2); glVertex3f(x2,y2,z2); glVertex3f(x2,y2,z1);
+    glVertex3f(x1,y1,z2); glVertex3f(x1,y1,z1); glVertex3f(x1,y2,z1); glVertex3f(x1,y2,z2);
+    glColor3ub(dark.r,dark.g,dark.b);
+    glVertex3f(x2,y1,z1); glVertex3f(x1,y1,z1); glVertex3f(x1,y2,z1); glVertex3f(x2,y2,z1);
+    glVertex3f(x1,y1,z1); glVertex3f(x2,y1,z1); glVertex3f(x2,y1,z2); glVertex3f(x1,y1,z2);
+    glEnd();
+}
+
+static void drawWheel3D(float x,float z,float side){
+    box3D(x+side*0.38f,0.08f,z-0.32f,0.18f,0.28f,0.28f,(Color){18,18,18,255});
+    box3D(x+side*0.38f,0.08f,z+0.32f,0.18f,0.28f,0.28f,(Color){18,18,18,255});
+}
+
 /* ══════════════════════════════════════════════
    drawCar()
    Slim, detailed car using layered rects.
@@ -465,6 +626,39 @@ static void drawWheel(int wx,int wy,int ww,int wh){
    ══════════════════════════════════════════════ */
 static void drawCar(Car *c,int isPlayer){
     if(!c->active) return;
+    use3D();
+    float carX=carLanePos(c);
+    float carZ=isPlayer ? -7.8f : carDepth(c);
+    if(!isPlayer && (carZ>-4.5f || carZ<-150.0f)) return;
+    float carBob=(float)pulse(frameNo+(int)c->y,32,3)*0.015f;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUADS);
+    glColor4ub(0,0,0,85);
+    glVertex3f(carX-0.55f,0.025f,carZ-0.85f);
+    glVertex3f(carX+0.55f,0.025f,carZ-0.85f);
+    glVertex3f(carX+0.60f,0.025f,carZ+0.85f);
+    glVertex3f(carX-0.60f,0.025f,carZ+0.85f);
+    glEnd();
+    glDisable(GL_BLEND);
+
+    Color body=c->body;
+    if(isPlayer && invFrames>0 && (invFrames/5)%2==0) body=(Color){235,250,255,255};
+    box3D(carX,0.10f+carBob,carZ,0.82f,0.34f,1.45f,body);
+    box3D(carX,0.42f+carBob,carZ-0.05f,0.56f,0.36f,0.72f,
+          isPlayer?(Color){105,210,255,255}:(Color){210,220,235,255});
+    box3D(carX,0.22f+carBob,carZ-0.72f,0.64f,0.18f,0.28f,shade(body,1.12f));
+    box3D(carX,0.23f+carBob,carZ+0.72f,0.64f,0.16f,0.28f,shade(body,0.65f));
+    if(isPlayer) box3D(carX,0.80f+carBob,carZ-0.05f,0.12f,0.03f,1.05f,(Color){20,255,235,255});
+
+    drawWheel3D(carX,carZ,-1.0f);
+    drawWheel3D(carX,carZ, 1.0f);
+    box3D(carX-0.22f,0.34f+carBob,carZ-0.86f,0.18f,0.09f,0.06f,(Color){255,245,140,255});
+    box3D(carX+0.22f,0.34f+carBob,carZ-0.86f,0.18f,0.09f,0.06f,(Color){255,245,140,255});
+    box3D(carX-0.22f,0.31f+carBob,carZ+0.86f,0.18f,0.08f,0.06f,(Color){230,20,20,255});
+    box3D(carX+0.22f,0.31f+carBob,carZ+0.86f,0.18f,0.08f,0.06f,(Color){230,20,20,255});
+    return;
     int x=(int)c->x, y=(int)c->y;
     int bob=isPlayer ? pulse(frameNo,28,3)-1 : pulse(frameNo+(int)c->y,34,2)-1;
     y+=bob;
@@ -628,6 +822,7 @@ static void resetGame(void){
         spawnEnemy(i);
     }
     for(int i=0;i<MAX_PARTICLES;i++) sparks[i].life=0;
+    player.x=(float)laneX(1);
     resetSpeedLines();
 }
 
@@ -647,17 +842,10 @@ static void titleScreen(void){
         /* Dark gradient */
         for(int y=0;y<WIN_H;y++){
             int v=20+(int)(y*0.15f); if(v>86)v=86;
-            SDL_SetRenderDrawColor(ren,2,6,v,255);
-            SDL_RenderDrawLine(ren,0,y,WIN_W,y);
+            fillR(0,y,WIN_W,1,(Color){2,6,(Uint8)v,255});
         }
-        /* Road preview */
-        fillR(ROAD_LEFT,0,ROAD_W,WIN_H,(Color){55,55,55,255});
-        for(int y=(int)roadOff%54-54;y<WIN_H;y+=54){
-            glowR(ROAD_LEFT+LANE_W-2,    y,4,36,(Color){255,255,255,65});
-            glowR(ROAD_LEFT+LANE_W*2-2,  y,4,36,(Color){255,255,255,65});
-            fillR(ROAD_LEFT+LANE_W-2,    y,4,36,(Color){255,255,255,255});
-            fillR(ROAD_LEFT+LANE_W*2-2,  y,4,36,(Color){255,255,255,255});
-        }
+        fillR(0,HORIZON_Y,WIN_W,WIN_H-HORIZON_Y,(Color){18,80,48,255});
+        drawRoad();
         drawSpeedLines();
         blendR(82,44,536,98,(Color){0,0,0,185});
         outR(92,54,516,78,(Color){0,220,255,170});
@@ -701,7 +889,7 @@ static int gameOverScreen(void){
             }
         }
         frameNo++;
-        SDL_SetRenderDrawColor(ren,8,8,12,255); SDL_RenderClear(ren);
+        glClearColor(0.03f,0.03f,0.05f,1.0f); SDL_RenderClear(ren);
         for(int y=0;y<WIN_H;y+=12)
             blendR(0,y+pulse(frameNo,80,10),WIN_W,2,(Color){255,40,40,35});
         updateParticles(); drawParticles();
@@ -729,10 +917,21 @@ int main(int argc,char *argv[]){
     if(SDL_Init(SDL_INIT_VIDEO)<0){fprintf(stderr,"SDL: %s\n",SDL_GetError());return 1;}
     if(TTF_Init()<0){fprintf(stderr,"TTF: %s\n",TTF_GetError());SDL_Quit();return 1;}
 
-    win=SDL_CreateWindow("Turbo Road",
-        SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,WIN_W,WIN_H,SDL_WINDOW_SHOWN);
-    ren=SDL_CreateRenderer(win,-1,
-        SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,1);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,24);
+
+    win=SDL_CreateWindow("Turbo Road 3D",
+        SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,WIN_W,WIN_H,
+        SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN);
+    if(!win){fprintf(stderr,"Window: %s\n",SDL_GetError());TTF_Quit();SDL_Quit();return 1;}
+    glCtx=SDL_GL_CreateContext(win);
+    if(!glCtx){fprintf(stderr,"OpenGL: %s\n",SDL_GetError());SDL_DestroyWindow(win);TTF_Quit();SDL_Quit();return 1;}
+    SDL_GL_SetSwapInterval(1);
+    glViewport(0,0,WIN_W,WIN_H);
+    glClearColor(0.36f,0.62f,0.86f,1.0f);
+    glDisable(GL_CULL_FACE);
 
     const char *fp[]={"C:/Windows/Fonts/arial.ttf","C:/Windows/Fonts/verdana.ttf",
                       "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",NULL};
@@ -841,6 +1040,7 @@ int main(int argc,char *argv[]){
     if(font)   TTF_CloseFont(font);
     if(bigFont)TTF_CloseFont(bigFont);
     TTF_Quit();
+    if(glCtx) SDL_GL_DeleteContext(glCtx);
     SDL_DestroyRenderer(ren); SDL_DestroyWindow(win); SDL_Quit();
     return 0;
 }
