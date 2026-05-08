@@ -129,6 +129,21 @@ static float carLanePos(Car *c){
 static float carDepth(Car *c){
     return -7.0f - ((float)WIN_H-c->y)*0.105f;
 }
+static float roadTAtZ(float z){
+    float t=(-z-2.6f)/122.4f;
+    if(t<0.0f) t=0.0f;
+    if(t>1.0f) t=1.0f;
+    return t;
+}
+static float roadCurveAtZ(float z){
+    float t=roadTAtZ(z);
+    float drift=(float)(((int)(roadOff*0.03f)%220)-110)/110.0f;
+    return t*t*(2.8f*t-1.25f) + t*t*1.25f*drift;
+}
+static float roadHalfAtZ(float z){
+    float t=roadTAtZ(z);
+    return 4.8f - 0.7f*t;
+}
 
 /* ══════════════════════════════════════════════
    DRAW PRIMITIVES
@@ -678,15 +693,22 @@ static void drawRoad(void){
     glVertex3f(-80.0f,-0.08f,-125.0f);
     glEnd();
 
-    /* Actual 3D asphalt plane */
-    glBegin(GL_QUADS);
-    glColor3ub(62,64,68);
-    glVertex3f(-4.8f,0.0f,-2.6f);
-    glVertex3f( 4.8f,0.0f,-2.6f);
-    glColor3ub(28,30,34);
-    glVertex3f( 4.1f,0.0f,-125.0f);
-    glVertex3f(-4.1f,0.0f,-125.0f);
-    glEnd();
+    /* Actual 3D asphalt made from curved slices */
+    for(int s=0;s<50;s++){
+        float z1=-2.6f-(float)s*2.45f;
+        float z2=z1-2.45f;
+        float c1=roadCurveAtZ(z1), c2=roadCurveAtZ(z2);
+        float h1=roadHalfAtZ(z1), h2=roadHalfAtZ(z2);
+        Uint8 shadeV=(Uint8)(62-(s>34?20:s/2));
+        glBegin(GL_QUADS);
+        glColor3ub(shadeV,shadeV,shadeV+4);
+        glVertex3f(c1-h1,0.0f,z1);
+        glVertex3f(c1+h1,0.0f,z1);
+        glColor3ub(30,32,36);
+        glVertex3f(c2+h2,0.0f,z2);
+        glVertex3f(c2-h2,0.0f,z2);
+        glEnd();
+    }
 
     /* Subtle asphalt grain and tire paths */
     glEnable(GL_BLEND);
@@ -694,7 +716,7 @@ static void drawRoad(void){
     for(int i=0;i<34;i++){
         float z=-5.0f-(float)((i*11+(int)(roadOff*0.22f))%118);
         float lane=((i*37)%100)/100.0f;
-        float x=-3.55f+lane*7.1f;
+        float x=roadCurveAtZ(z)-3.55f+lane*7.1f;
         float w=0.10f+(float)(i%5)*0.025f;
         glBegin(GL_QUADS);
         glColor4ub(255,255,255,(GLubyte)(13+(i%4)*5));
@@ -705,58 +727,69 @@ static void drawRoad(void){
     for(int side=-1;side<=1;side+=2){
         glBegin(GL_QUADS);
         glColor4ub(0,0,0,45);
-        glVertex3f(side*1.55f,0.053f,-3.2f);
-        glVertex3f(side*1.82f,0.053f,-3.2f);
+        glVertex3f(roadCurveAtZ(-3.2f)+side*1.55f,0.053f,-3.2f);
+        glVertex3f(roadCurveAtZ(-3.2f)+side*1.82f,0.053f,-3.2f);
         glColor4ub(0,0,0,12);
-        glVertex3f(side*1.62f,0.053f,-124.0f);
-        glVertex3f(side*1.42f,0.053f,-124.0f);
+        glVertex3f(roadCurveAtZ(-124.0f)+side*1.62f,0.053f,-124.0f);
+        glVertex3f(roadCurveAtZ(-124.0f)+side*1.42f,0.053f,-124.0f);
         glEnd();
     }
     glDisable(GL_BLEND);
 
-    /* Shoulders */
-    glBegin(GL_QUADS);
-    glColor3ub(115,105,88);
-    glVertex3f(-6.0f,0.01f,-2.6f); glVertex3f(-4.8f,0.01f,-2.6f);
-    glColor3ub(72,70,62);
-    glVertex3f(-4.1f,0.01f,-125.0f); glVertex3f(-5.1f,0.01f,-125.0f);
-    glColor3ub(115,105,88);
-    glVertex3f(4.8f,0.01f,-2.6f); glVertex3f(6.0f,0.01f,-2.6f);
-    glColor3ub(72,70,62);
-    glVertex3f(5.1f,0.01f,-125.0f); glVertex3f(4.1f,0.01f,-125.0f);
-    glEnd();
+    /* Shoulders follow the same curve as the road */
+    for(int s=0;s<50;s++){
+        float z1=-2.6f-(float)s*2.45f, z2=z1-2.45f;
+        float c1=roadCurveAtZ(z1), c2=roadCurveAtZ(z2);
+        float h1=roadHalfAtZ(z1), h2=roadHalfAtZ(z2);
+        glBegin(GL_QUADS);
+        glColor3ub(115,105,88);
+        glVertex3f(c1-h1-1.15f,0.01f,z1); glVertex3f(c1-h1,0.01f,z1);
+        glColor3ub(72,70,62);
+        glVertex3f(c2-h2,0.01f,z2); glVertex3f(c2-h2-1.0f,0.01f,z2);
+        glColor3ub(115,105,88);
+        glVertex3f(c1+h1,0.01f,z1); glVertex3f(c1+h1+1.15f,0.01f,z1);
+        glColor3ub(72,70,62);
+        glVertex3f(c2+h2+1.0f,0.01f,z2); glVertex3f(c2+h2,0.01f,z2);
+        glEnd();
+    }
 
     /* Road edge lines */
     glLineWidth(3.0f);
     glBegin(GL_LINES);
     glColor3ub(255,218,48);
-    glVertex3f(-4.55f,0.035f,-2.6f); glVertex3f(-3.95f,0.035f,-125.0f);
-    glVertex3f( 4.55f,0.035f,-2.6f); glVertex3f( 3.95f,0.035f,-125.0f);
+    for(int s=0;s<50;s++){
+        float z1=-2.6f-(float)s*2.45f, z2=z1-2.45f;
+        glVertex3f(roadCurveAtZ(z1)-roadHalfAtZ(z1)+0.25f,0.035f,z1);
+        glVertex3f(roadCurveAtZ(z2)-roadHalfAtZ(z2)+0.25f,0.035f,z2);
+        glVertex3f(roadCurveAtZ(z1)+roadHalfAtZ(z1)-0.25f,0.035f,z1);
+        glVertex3f(roadCurveAtZ(z2)+roadHalfAtZ(z2)-0.25f,0.035f,z2);
+    }
     glEnd();
 
     /* Low guardrail glints near the useful driving area */
     glLineWidth(2.0f);
     glBegin(GL_LINES);
     glColor3ub(180,188,186);
-    glVertex3f(-5.45f,0.32f,-5.0f); glVertex3f(-4.55f,0.22f,-54.0f);
-    glVertex3f( 5.45f,0.32f,-5.0f); glVertex3f( 4.55f,0.22f,-54.0f);
+    glVertex3f(roadCurveAtZ(-5.0f)-5.45f,0.32f,-5.0f); glVertex3f(roadCurveAtZ(-54.0f)-4.55f,0.22f,-54.0f);
+    glVertex3f(roadCurveAtZ(-5.0f)+5.45f,0.32f,-5.0f); glVertex3f(roadCurveAtZ(-54.0f)+4.55f,0.22f,-54.0f);
     glEnd();
     for(float z=-7.0f;z>-54.0f;z-=8.0f){
-        box3D(-5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
-        box3D( 5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
+        box3D(roadCurveAtZ(z)-5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
+        box3D(roadCurveAtZ(z)+5.25f,0.02f,z,0.08f,0.42f,0.08f,(Color){125,130,125,255});
     }
 
     /* Lane divider dashes moving in world space */
     float off=(float)((int)(roadOff*0.10f)%12);
     for(float z=-4.0f+off;z>-122.0f;z-=12.0f){
         for(int lane=1;lane<NUM_LANES;lane++){
-            float x=-4.45f+(8.9f/NUM_LANES)*lane;
+            float x=roadCurveAtZ(z)-4.45f+(8.9f/NUM_LANES)*lane;
+            float x2=roadCurveAtZ(z-5.2f)-4.45f+(8.9f/NUM_LANES)*lane;
             glBegin(GL_QUADS);
             glColor3ub(245,245,235);
             glVertex3f(x-0.045f,0.045f,z);
             glVertex3f(x+0.045f,0.045f,z);
-            glVertex3f(x+0.045f,0.045f,z-5.2f);
-            glVertex3f(x-0.045f,0.045f,z-5.2f);
+            glVertex3f(x2+0.045f,0.045f,z-5.2f);
+            glVertex3f(x2-0.045f,0.045f,z-5.2f);
             glEnd();
         }
     }
@@ -766,10 +799,12 @@ static void drawRoad(void){
         Color c=((int)(-z/6.0f)%2)?(Color){92,92,86,255}:(Color){128,124,108,255};
         glColor3ub(c.r,c.g,c.b);
         glBegin(GL_QUADS);
-        glVertex3f(-4.7f,0.05f,z); glVertex3f(-4.25f,0.05f,z);
-        glVertex3f(-4.25f,0.05f,z-3.0f); glVertex3f(-4.7f,0.05f,z-3.0f);
-        glVertex3f(4.25f,0.05f,z); glVertex3f(4.7f,0.05f,z);
-        glVertex3f(4.7f,0.05f,z-3.0f); glVertex3f(4.25f,0.05f,z-3.0f);
+        float c1=roadCurveAtZ(z), c2=roadCurveAtZ(z-3.0f);
+        float h1=roadHalfAtZ(z), h2=roadHalfAtZ(z-3.0f);
+        glVertex3f(c1-h1-0.45f,0.05f,z); glVertex3f(c1-h1,0.05f,z);
+        glVertex3f(c2-h2,0.05f,z-3.0f); glVertex3f(c2-h2-0.45f,0.05f,z-3.0f);
+        glVertex3f(c1+h1,0.05f,z); glVertex3f(c1+h1+0.45f,0.05f,z);
+        glVertex3f(c2+h2+0.45f,0.05f,z-3.0f); glVertex3f(c2+h2,0.05f,z-3.0f);
         glEnd();
     }
 }
@@ -819,8 +854,8 @@ static void drawWheel3D(float x,float z,float side){
 static void drawCar(Car *c,int isPlayer){
     if(!c->active) return;
     use3D();
-    float carX=carLanePos(c);
     float carZ=isPlayer ? -5.8f : carDepth(c);
+    float carX=roadCurveAtZ(carZ)+carLanePos(c);
     if(!isPlayer && (carZ>-3.4f || carZ<-118.0f)) return;
     float carBob=(float)pulse(frameNo+(int)c->y,32,3)*0.015f;
     float s=isPlayer ? 1.08f : 1.0f;
