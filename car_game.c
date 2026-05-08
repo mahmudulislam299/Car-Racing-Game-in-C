@@ -127,7 +127,7 @@ static float carLanePos(Car *c){
     return ((c->x-(float)ROAD_LEFT)/(float)ROAD_W)*6.0f-3.0f;
 }
 static float carDepth(Car *c){
-    return -8.0f - ((float)WIN_H-c->y)*0.18f;
+    return -7.0f - ((float)WIN_H-c->y)*0.105f;
 }
 
 /* ══════════════════════════════════════════════
@@ -146,11 +146,11 @@ static void use3D(void){
     glEnable(GL_DEPTH_TEST);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-aspect*0.08,aspect*0.08,-0.08,0.08,0.1,160.0);
+    glFrustum(-aspect*0.075,aspect*0.075,-0.055,0.105,0.1,140.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glRotatef(13.0f,1.0f,0.0f,0.0f);
-    glTranslatef(-playerLanePos()*0.16f,-2.0f,-1.0f);
+    glRotatef(9.0f,1.0f,0.0f,0.0f);
+    glTranslatef(-playerLanePos()*0.14f,-3.0f,0.4f);
 }
 static void setCol(SDL_Renderer *r, Color c){
     (void)r;
@@ -599,48 +599,48 @@ static void drawRoad(void){
     /* Ground plane */
     glBegin(GL_QUADS);
     glColor3ub(18,95,45);
-    glVertex3f(-80.0f,-0.08f,-4.0f);
-    glVertex3f( 80.0f,-0.08f,-4.0f);
+    glVertex3f(-80.0f,-0.08f,-2.6f);
+    glVertex3f( 80.0f,-0.08f,-2.6f);
     glColor3ub(8,55,35);
-    glVertex3f( 80.0f,-0.08f,-160.0f);
-    glVertex3f(-80.0f,-0.08f,-160.0f);
+    glVertex3f( 80.0f,-0.08f,-125.0f);
+    glVertex3f(-80.0f,-0.08f,-125.0f);
     glEnd();
 
     /* Actual 3D asphalt plane */
     glBegin(GL_QUADS);
     glColor3ub(62,64,68);
-    glVertex3f(-4.2f,0.0f,-4.0f);
-    glVertex3f( 4.2f,0.0f,-4.0f);
+    glVertex3f(-4.8f,0.0f,-2.6f);
+    glVertex3f( 4.8f,0.0f,-2.6f);
     glColor3ub(28,30,34);
-    glVertex3f( 4.2f,0.0f,-155.0f);
-    glVertex3f(-4.2f,0.0f,-155.0f);
+    glVertex3f( 4.1f,0.0f,-125.0f);
+    glVertex3f(-4.1f,0.0f,-125.0f);
     glEnd();
 
     /* Shoulders */
     glBegin(GL_QUADS);
     glColor3ub(115,105,88);
-    glVertex3f(-5.1f,0.01f,-4.0f); glVertex3f(-4.2f,0.01f,-4.0f);
+    glVertex3f(-6.0f,0.01f,-2.6f); glVertex3f(-4.8f,0.01f,-2.6f);
     glColor3ub(72,70,62);
-    glVertex3f(-4.2f,0.01f,-155.0f); glVertex3f(-5.1f,0.01f,-155.0f);
+    glVertex3f(-4.1f,0.01f,-125.0f); glVertex3f(-5.1f,0.01f,-125.0f);
     glColor3ub(115,105,88);
-    glVertex3f(4.2f,0.01f,-4.0f); glVertex3f(5.1f,0.01f,-4.0f);
+    glVertex3f(4.8f,0.01f,-2.6f); glVertex3f(6.0f,0.01f,-2.6f);
     glColor3ub(72,70,62);
-    glVertex3f(5.1f,0.01f,-155.0f); glVertex3f(4.2f,0.01f,-155.0f);
+    glVertex3f(5.1f,0.01f,-125.0f); glVertex3f(4.1f,0.01f,-125.0f);
     glEnd();
 
     /* Road edge lines */
     glLineWidth(3.0f);
     glBegin(GL_LINES);
     glColor3ub(255,218,48);
-    glVertex3f(-4.0f,0.035f,-4.0f); glVertex3f(-4.0f,0.035f,-155.0f);
-    glVertex3f( 4.0f,0.035f,-4.0f); glVertex3f( 4.0f,0.035f,-155.0f);
+    glVertex3f(-4.55f,0.035f,-2.6f); glVertex3f(-3.95f,0.035f,-125.0f);
+    glVertex3f( 4.55f,0.035f,-2.6f); glVertex3f( 3.95f,0.035f,-125.0f);
     glEnd();
 
     /* Lane divider dashes moving in world space */
     float off=(float)((int)(roadOff*0.10f)%12);
-    for(float z=-6.0f+off;z>-150.0f;z-=12.0f){
+    for(float z=-4.0f+off;z>-122.0f;z-=12.0f){
         for(int lane=1;lane<NUM_LANES;lane++){
-            float x=-4.0f+(8.0f/NUM_LANES)*lane;
+            float x=-4.45f+(8.9f/NUM_LANES)*lane;
             glBegin(GL_QUADS);
             glColor3ub(245,245,235);
             glVertex3f(x-0.045f,0.045f,z);
@@ -652,7 +652,7 @@ static void drawRoad(void){
     }
 
     /* Red/white rumble strip blocks */
-    for(float z=-5.0f+off;z>-145.0f;z-=6.0f){
+    for(float z=-3.2f+off;z>-120.0f;z-=6.0f){
         Color c=((int)(-z/6.0f)%2)?(Color){230,30,28,255}:(Color){240,240,230,255};
         glColor3ub(c.r,c.g,c.b);
         glBegin(GL_QUADS);
@@ -710,29 +710,31 @@ static void drawCar(Car *c,int isPlayer){
     if(!c->active) return;
     use3D();
     float carX=carLanePos(c);
-    float carZ=isPlayer ? -7.8f : carDepth(c);
-    if(!isPlayer && (carZ>-4.5f || carZ<-150.0f)) return;
+    float carZ=isPlayer ? -5.8f : carDepth(c);
+    if(!isPlayer && (carZ>-3.4f || carZ<-118.0f)) return;
     float carBob=(float)pulse(frameNo+(int)c->y,32,3)*0.015f;
+    float s=isPlayer ? 1.08f : 1.0f;
+    if(!isPlayer && carZ<-35.0f) s=1.0f+((-35.0f-carZ)/83.0f)*0.55f;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     glBegin(GL_QUADS);
     glColor4ub(0,0,0,85);
-    glVertex3f(carX-0.55f,0.025f,carZ-0.85f);
-    glVertex3f(carX+0.55f,0.025f,carZ-0.85f);
-    glVertex3f(carX+0.60f,0.025f,carZ+0.85f);
-    glVertex3f(carX-0.60f,0.025f,carZ+0.85f);
+    glVertex3f(carX-0.55f*s,0.025f,carZ-0.85f*s);
+    glVertex3f(carX+0.55f*s,0.025f,carZ-0.85f*s);
+    glVertex3f(carX+0.60f*s,0.025f,carZ+0.85f*s);
+    glVertex3f(carX-0.60f*s,0.025f,carZ+0.85f*s);
     glEnd();
     glDisable(GL_BLEND);
 
     Color body=c->body;
     if(isPlayer && invFrames>0 && (invFrames/5)%2==0) body=(Color){235,250,255,255};
-    box3D(carX,0.10f+carBob,carZ,0.82f,0.34f,1.45f,body);
-    box3D(carX,0.42f+carBob,carZ-0.05f,0.56f,0.36f,0.72f,
+    box3D(carX,0.10f+carBob,carZ,0.82f*s,0.34f*s,1.45f*s,body);
+    box3D(carX,0.42f*s+carBob,carZ-0.05f*s,0.56f*s,0.36f*s,0.72f*s,
           isPlayer?(Color){105,210,255,255}:(Color){210,220,235,255});
-    box3D(carX,0.22f+carBob,carZ-0.72f,0.64f,0.18f,0.28f,shade(body,1.12f));
-    box3D(carX,0.23f+carBob,carZ+0.72f,0.64f,0.16f,0.28f,shade(body,0.65f));
-    if(isPlayer) box3D(carX,0.80f+carBob,carZ-0.05f,0.12f,0.03f,1.05f,(Color){20,255,235,255});
+    box3D(carX,0.22f*s+carBob,carZ-0.72f*s,0.64f*s,0.18f*s,0.28f*s,shade(body,1.12f));
+    box3D(carX,0.23f*s+carBob,carZ+0.72f*s,0.64f*s,0.16f*s,0.28f*s,shade(body,0.65f));
+    if(isPlayer) box3D(carX,0.80f*s+carBob,carZ-0.05f*s,0.12f*s,0.03f*s,1.05f*s,(Color){20,255,235,255});
 
     /* Sport-car details: windshield, side mirrors, spoiler, trim, and grille. */
     box3D(carX,0.73f+carBob,carZ-0.22f,0.48f,0.04f,0.28f,(Color){45,95,125,255});
