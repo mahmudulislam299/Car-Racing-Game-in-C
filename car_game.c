@@ -1307,6 +1307,79 @@ static void drawHUD(void){
 /* ══════════════════════════════════════════════
    HIGH SCORE
    ══════════════════════════════════════════════ */
+static void drawGameOverBackdrop(void){
+    drawBackground();
+    drawRoad();
+    drawSpeedLines();
+    blendR(0,0,WIN_W,WIN_H,(Color){6,8,16,132});
+    blendR(0,0,WIN_W,102,(Color){0,0,0,82});
+    blendR(0,WIN_H-122,WIN_W,122,(Color){0,0,0,96});
+    for(int i=0;i<7;i++){
+        int y=96+i*72+((frameNo*2+i*9)%24);
+        blendR(0,y,WIN_W,3,(Color){255,64,64,16});
+    }
+    for(int i=0;i<5;i++){
+        int x=60+i*180+((frameNo+i*13)%36);
+        blendR(x,70,86,8,(Color){255,220,90,26});
+    }
+    blendR(0,HORIZON_Y-18,WIN_W,4,(Color){255,90,70,55});
+}
+
+static void drawCrashPanel(int hi){
+    Color red={235,40,50,255},orange={255,150,40,255};
+    Color white={255,255,255,255},yellow={255,220,90,255};
+    Color cyan={120,235,255,255},green={110,255,140,255};
+
+    int panelX=92, panelY=86, panelW=716, panelH=392;
+    glowR(panelX-8,panelY-8,panelW+16,panelH+16,(Color){255,50,50,32});
+    blendR(panelX,panelY,panelW,panelH,(Color){8,10,16,224});
+    outR(panelX,panelY,panelW,panelH,(Color){255,78,78,175});
+    outR(panelX+10,panelY+10,panelW-20,panelH-20,(Color){255,220,90,72});
+
+    fillR(panelX+14,panelY+14,56,4,(Color){255,80,80,220});
+    fillR(panelX+14,panelY+14,4,56,(Color){255,80,80,220});
+    fillR(panelX+panelW-70,panelY+14,56,4,(Color){255,80,80,220});
+    fillR(panelX+panelW-18,panelY+14,4,56,(Color){255,80,80,220});
+    fillR(panelX+14,panelY+panelH-18,56,4,(Color){255,80,80,220});
+    fillR(panelX+14,panelY+panelH-70,4,56,(Color){255,80,80,220});
+    fillR(panelX+panelW-70,panelY+panelH-18,56,4,(Color){255,80,80,220});
+    fillR(panelX+panelW-18,panelY+panelH-70,4,56,(Color){255,80,80,220});
+
+    int cx=panelX+112, cy=panelY+146;
+    glowR(cx-42,cy-26,84,52,(Color){255,60,40,55});
+    fillR(cx-44,cy-10,88,32,(Color){35,40,52,255});
+    fillR(cx-28,cy-28,56,18,(Color){35,40,52,255});
+    fillR(cx-36,cy+18,14,12,(Color){18,18,22,255});
+    fillR(cx+22,cy+18,14,12,(Color){18,18,22,255});
+    line(cx-24,cy-18,cx-2,cy+2,(Color){255,102,80,255});
+    line(cx-2,cy+2,cx+24,cy-12,(Color){255,102,80,255});
+    line(cx-8,cy-26,cx+12,cy+18,(Color){255,102,80,255});
+    circle2D(cx-20,cy+8,5,(Color){255,180,70,255});
+    circle2D(cx+18,cy+8,5,(Color){255,180,70,255});
+    tri2D(cx+34,cy-30,cx+52,cy-4,cx+10,cy-8,(Color){255,206,70,255});
+    tri2D(cx+34,cy-24,cx+44,cy-8,cx+18,cy-10,(Color){255,60,50,255});
+
+    if(bigFont) renderCentered("CRASHED",114+pulse(frameNo,40,4),red,bigFont);
+    renderCentered("Your run ended in a wall of sparks.",172,white,font);
+
+    char buf[64];
+    sprintf(buf,"Score  %d",score);
+    renderCentered(buf,234,cyan,font);
+    sprintf(buf,"Best   %d",hi);
+    renderCentered(buf,262,yellow,font);
+    if(score>0&&score>=hi) renderCentered("NEW HIGH SCORE",292,orange,font);
+    else renderCentered("ROUTE CLOSED",292,orange,font);
+
+    blendR(142,334,616,86,(Color){0,0,0,145});
+    outR(142,334,616,86,(Color){255,255,255,42});
+    renderCentered("R   Restart the race",352,green,font);
+    renderCentered("ESC Quit to desktop",382,white,font);
+
+    if((frameNo/24)%2==0){
+        renderCentered("Press R to run it back",428,yellow,font);
+    }
+}
+
 static void saveHighScore(int s){
     int hi=0; FILE *f=fopen("highscore.dat","r");
     if(f){fscanf(f,"%d",&hi);fclose(f);}
@@ -1382,7 +1455,7 @@ static int gameOverScreen(void){
     int hi=0; FILE *f=fopen("highscore.dat","r");
     if(f){fscanf(f,"%d",&hi);fclose(f);}
     spawnExplosion(WIN_W/2,WIN_H/2);
-    int blink=0; SDL_Event e;
+    SDL_Event e;
     while(1){
         while(SDL_PollEvent(&e)){
             if(e.type==SDL_QUIT){running=0;return 0;}
@@ -1392,23 +1465,12 @@ static int gameOverScreen(void){
             }
         }
         frameNo++;
-        glClearColor(0.03f,0.03f,0.05f,1.0f); SDL_RenderClear(ren);
-        for(int y=0;y<WIN_H;y+=12)
-            blendR(0,y+pulse(frameNo,80,10),WIN_W,2,(Color){255,40,40,35});
+        glClearColor(0.02f,0.02f,0.04f,1.0f); SDL_RenderClear(ren);
+        drawGameOverBackdrop();
         updateParticles(); drawParticles();
-        blendR(104,58,492,335,(Color){0,0,0,220});
-        outR(114,68,472,315,(Color){255,80,80,170});
-        Color red={220,0,0,255},yellow={255,220,0,255};
-        Color white={255,255,255,255},green={100,255,100,255};
-        if(bigFont) renderCentered("GAME  OVER",82+pulse(frameNo,50,5),red,bigFont);
-        char buf[64];
-        sprintf(buf,"Your Score :  %d",score); renderCentered(buf,190,white,font);
-        sprintf(buf,"Best Score :  %d",hi);    renderCentered(buf,218,yellow,font);
-        if(score>0&&score>=hi) renderCentered("NEW HIGH SCORE!",250,yellow,font);
-        renderCentered("R      =   Play Again",305,green,font);
-        renderCentered("ESC  =   Quit",         331,white,font);
-        if((blink/28)%2==0) renderCentered("Better luck next time!",372,red,font);
-        SDL_RenderPresent(ren); SDL_Delay(16); blink++;
+        drawCrashPanel(hi);
+        SDL_RenderPresent(ren);
+        SDL_Delay(16);
     }
 }
 
