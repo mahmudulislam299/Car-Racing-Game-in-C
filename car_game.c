@@ -1,13 +1,14 @@
 /*
  =============================================================
    TURBO ROAD  -  SDL2 Car Racing Game in C
-   Build: gcc car_game.c -o car_game -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lopengl32
+   Build: gcc car_game.c -o car_game -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lglu32 -lopengl32
  =============================================================
 */
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_opengl.h>
+#include <GL/glu.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -22,18 +23,18 @@
 } while(0)
 
 /* ─── Window & timing ─── */
-#define WIN_W       700
-#define WIN_H       500
+#define WIN_W       900
+#define WIN_H       650
 #define FPS         60
 #define FRAME_MS    (1000 / FPS)
 
 /* ─── Road layout (wider road, narrow grass strips) ─── */
-#define ROAD_LEFT    175               /* left edge of road  */
-#define ROAD_RIGHT   525              /* right edge of road */
-#define ROAD_W       (ROAD_RIGHT - ROAD_LEFT)   /* 350 px total road */
+#define ROAD_LEFT    250               /* left edge of road  */
+#define ROAD_RIGHT   650               /* right edge of road */
+#define ROAD_W       (ROAD_RIGHT - ROAD_LEFT)   /* 400 px total road */
 #define NUM_LANES    3
-#define LANE_W       (ROAD_W / NUM_LANES)       /* 117 px per lane  */
-#define HORIZON_Y    132
+#define LANE_W       (ROAD_W / NUM_LANES)       /* 133 px per lane  */
+#define HORIZON_Y    178
 #define ROAD_NEAR_W  500
 #define ROAD_FAR_W    72
 
@@ -127,7 +128,7 @@ static float carLanePos(Car *c){
     return ((c->x-(float)ROAD_LEFT)/(float)ROAD_W)*6.0f-3.0f;
 }
 static float carDepth(Car *c){
-    return -7.0f - ((float)WIN_H-c->y)*0.105f;
+    return -5.8f - ((float)WIN_H-c->y)*0.078f;
 }
 static float roadTAtZ(float z){
     float t=(-z-2.6f)/122.4f;
@@ -175,12 +176,12 @@ static void use3D(void){
     glEnable(GL_DEPTH_TEST);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-aspect*0.075,aspect*0.075,-0.055,0.105,0.1,140.0);
+    glFrustum(-aspect*0.066,aspect*0.066,-0.035,0.122,0.1,140.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glRotatef(roadLean(),0.0f,0.0f,1.0f);
-    glRotatef(9.0f,1.0f,0.0f,0.0f);
-    glTranslatef(-playerLanePos()*0.14f,-3.0f,0.4f);
+    glRotatef(15.0f,1.0f,0.0f,0.0f);
+    glTranslatef(-playerLanePos()*0.14f,-2.45f,1.15f);
 }
 static void setCol(SDL_Renderer *r, Color c){
     (void)r;
@@ -245,32 +246,94 @@ static void drawHeart2D(int x,int y,int s,Color c){
 }
 static void drawHouse2D(int x,int y,int w,int h,Color wall,Color roof){
     blendR(x+3,y+h,w,5,(Color){0,0,0,35});
+    fillR(x+3,y+3,w,h,shade(wall,0.72f));
     fillR(x,y,w,h,wall);
+    fillR(x+w-5,y+3,5,h-3,shade(wall,0.78f));
+    fillR(x,y+h-4,w,4,shade(wall,0.82f));
     fillR(x+2,y+2,w-4,3,shade(wall,1.16f));
     tri2D(x-6,y,x+w/2,y-h/2,x+w+6,y,roof);
+    line(x-4,y,x+w/2,y-h/2,(Color){235,210,165,210});
+    line(x+w/2,y-h/2,x+w+4,y,(Color){85,54,44,210});
+    line(x+3,y+3,x+w-3,y+3,shade(wall,1.25f));
     fillR(x+w/2-4,y+h-13,8,13,(Color){92,62,42,255});
+    fillR(x+w/2-3,y+h-12,2,12,(Color){150,105,65,255});
     fillR(x+8,y+8,8,7,(Color){124,178,205,255});
     fillR(x+w-17,y+8,8,7,(Color){124,178,205,255});
+    line(x+8,y+11,x+16,y+11,(Color){235,245,250,150});
+    line(x+w-17,y+11,x+w-9,y+11,(Color){235,245,250,150});
+    if(w>50){
+        fillR(x+w/2-18,y+h-16,8,6,(Color){108,168,198,255});
+        line(x+w/2-18,y+h-13,x+w/2-10,y+h-13,(Color){235,245,250,135});
+    }
+    fillR(x+w/2-7,y+h,14,2,(Color){128,114,92,255});
+    fillR(x+w/2-10,y+h+2,20,2,(Color){100,94,82,230});
     fillR(x+w-10,y-h/2+4,5,12,(Color){116,76,50,255});
     blendR(x+w-8,y-h/2,18,7,(Color){235,238,232,50});
 }
 static void drawShop2D(int x,int y,int w,int h,Color wall){
     blendR(x+3,y+h,w,5,(Color){0,0,0,35});
+    fillR(x+3,y+3,w,h,shade(wall,0.72f));
     fillR(x,y,w,h,wall);
+    fillR(x,y+h-5,w,5,shade(wall,0.75f));
     fillR(x,y+7,w,6,(Color){178,46,48,255});
     fillR(x+5,y+7,8,6,(Color){244,230,178,255});
     fillR(x+21,y+7,8,6,(Color){244,230,178,255});
+    fillR(x+37,y+7,8,6,(Color){244,230,178,255});
     fillR(x+w-15,y+7,8,6,(Color){244,230,178,255});
     fillR(x+w/2-5,y+h-15,10,15,(Color){70,78,82,255});
-    fillR(x+7,y+18,10,8,(Color){110,174,205,255});
-    fillR(x+w-17,y+18,10,8,(Color){110,174,205,255});
+    fillR(x+7,y+18,13,10,(Color){92,154,188,255});
+    fillR(x+w-21,y+18,13,10,(Color){92,154,188,255});
+    line(x+9,y+20,x+18,y+20,(Color){238,248,250,150});
+    line(x+w-19,y+20,x+w-10,y+20,(Color){238,248,250,150});
+    fillR(x-3,y+h,w+6,3,(Color){118,108,96,255});
     fillR(x+6,y-9,w-12,7,(Color){60,65,70,255});
     renderText("PIT",x+12,y-10,(Color){255,235,95,255},font);
 }
+static void drawApartment2D(int x,int y,int w,int h,Color wall,Color roof){
+    blendR(x+4,y+h,w,6,(Color){0,0,0,34});
+    fillR(x+4,y+4,w,h,shade(wall,0.68f));
+    fillR(x,y,w,h,wall);
+    fillR(x+w-6,y+3,6,h-3,shade(wall,0.72f));
+    fillR(x,y-7,w,7,roof);
+    fillR(x+5,y-13,w-10,6,shade(roof,1.12f));
+    int rows=(h>44)?3:2;
+    for(int row=0;row<rows;row++){
+        for(int col=0;col<3;col++){
+            int wx=x+7+col*(w-16)/3;
+            int wy=y+8+row*((h-19)/rows);
+            fillR(wx,wy,8,7,(Color){116,174,205,255});
+            line(wx,wy+3,wx+8,wy+3,(Color){236,246,250,145});
+        }
+        fillR(x+4,y+18+row*((h-19)/rows),w-10,2,shade(wall,0.82f));
+    }
+    fillR(x+w/2-5,y+h-15,10,15,(Color){64,70,72,255});
+    fillR(x+w/2-3,y+h-12,2,10,(Color){110,120,124,255});
+    fillR(x+3,y+h-3,w-6,3,shade(wall,0.78f));
+}
+static void drawOffice2D(int x,int y,int w,int h,Color wall,Color trim){
+    blendR(x+5,y+h,w,7,(Color){0,0,0,36});
+    fillR(x+5,y+4,w,h,shade(wall,0.64f));
+    fillR(x,y,w,h,wall);
+    fillR(x+w-7,y+3,7,h-3,shade(wall,0.72f));
+    fillR(x-2,y-8,w+4,8,trim);
+    fillR(x+4,y-13,w-8,5,shade(trim,1.14f));
+    for(int row=0;row<3;row++){
+        for(int col=0;col<4;col++){
+            int wx=x+7+col*((w-16)/4);
+            int wy=y+8+row*((h-17)/3);
+            fillR(wx,wy,7,7,(Color){102,164,196,255});
+            line(wx,wy+2,wx+7,wy+2,(Color){236,248,250,145});
+        }
+    }
+    fillR(x+w/2-6,y+h-16,12,16,(Color){55,63,68,255});
+    fillR(x+w/2-12,y+h-2,24,3,shade(trim,0.85f));
+}
 static void drawBarn2D(int x,int y,int w,int h){
     blendR(x+4,y+h,w,5,(Color){0,0,0,34});
+    fillR(x+3,y+3,w,h,(Color){112,49,40,255});
     fillR(x,y,w,h,(Color){166,72,54,255});
     tri2D(x-5,y,x+w/2,y-h/2,x+w+5,y,(Color){96,70,58,255});
+    line(x-3,y,x+w/2,y-h/2,(Color){205,160,118,210});
     fillR(x+w/2-7,y+h-16,14,16,(Color){92,52,38,255});
     line(x+w/2-7,y+h-16,x+w/2+7,y+h,(Color){210,166,120,255});
     line(x+w/2+7,y+h-16,x+w/2-7,y+h,(Color){210,166,120,255});
@@ -582,20 +645,23 @@ static void drawBackground(void){
     blendR(0,HORIZON_Y+82,WIN_W,18,(Color){21,101,48,80});
 
     /* Small village held near the horizon so it feels distant and realistic */
-    int villageX=74-(hillShift/5);
-    drawHouse2D(villageX,       HORIZON_Y+31,38,22,(Color){204,187,150,255},(Color){118,72,56,255});
-    drawBarn2D (villageX+70,    HORIZON_Y+34,46,26);
-    drawShop2D (villageX+145,   HORIZON_Y+30,54,30,(Color){198,178,126,255});
-    drawHouse2D(villageX+238,   HORIZON_Y+35,34,20,(Color){186,198,168,255},(Color){82,94,98,255});
-    drawHouse2D(villageX+310,   HORIZON_Y+28,48,28,(Color){218,190,142,255},(Color){148,76,52,255});
-    drawBarn2D (villageX+392,   HORIZON_Y+37,38,22);
-    for(int i=0;i<4;i++){
-        int px=villageX+52+i*105;
+    int villageX=86-(hillShift/5);
+    drawHouse2D(villageX,       HORIZON_Y+42,52,30,(Color){204,187,150,255},(Color){118,72,56,255});
+    drawOffice2D(villageX+82,   HORIZON_Y+30,56,50,(Color){174,185,184,255},(Color){76,90,100,255});
+    drawBarn2D (villageX+172,   HORIZON_Y+48,58,34);
+    drawShop2D (villageX+270,   HORIZON_Y+42,70,38,(Color){198,178,126,255});
+    drawHouse2D(villageX+382,   HORIZON_Y+48,46,27,(Color){186,198,168,255},(Color){82,94,98,255});
+    drawApartment2D(villageX+466,HORIZON_Y+32,64,48,(Color){194,172,150,255},(Color){118,80,68,255});
+    drawOffice2D(villageX+574,  HORIZON_Y+35,52,45,(Color){178,168,158,255},(Color){120,82,70,255});
+    drawBarn2D (villageX+666,   HORIZON_Y+51,52,30);
+    for(int i=0;i<6;i++){
+        int px=villageX+62+i*118;
         fillR(px,HORIZON_Y+47,4,18,(Color){88,76,58,255});
         circle2D(px+2,HORIZON_Y+45,5,(Color){255,214,94,180});
     }
-    tri2D(villageX+212,HORIZON_Y+21,villageX+212,HORIZON_Y+39,villageX+238,HORIZON_Y+30,(Color){235,62,68,255});
-    fillR(villageX+210,HORIZON_Y+21,3,25,(Color){72,72,72,255});
+    tri2D(villageX+352,HORIZON_Y+29,villageX+352,HORIZON_Y+53,villageX+386,HORIZON_Y+41,(Color){235,62,68,255});
+    fillR(villageX+349,HORIZON_Y+29,3,32,(Color){72,72,72,255});
+    fillR(villageX+248,HORIZON_Y+69,112,5,(Color){78,70,58,255});
 
     /* Fence line and tree clusters, slow enough not to distract */
     int fenceShift=(int)(roadOff*0.12f)%80;
@@ -695,6 +761,7 @@ static void drawBackground(void){
    Road surface, yellow kerbs, scrolling dashes
    ══════════════════════════════════════════════ */
 static void box3D(float x,float y,float z,float sx,float sy,float sz,Color c);
+static void drawRoadsideModels3D(void);
 static void drawRoad(void){
     use3D();
 
@@ -707,6 +774,8 @@ static void drawRoad(void){
     glVertex3f( 80.0f,-0.08f,-125.0f);
     glVertex3f(-80.0f,-0.08f,-125.0f);
     glEnd();
+
+    drawRoadsideModels3D();
 
     /* Actual 3D asphalt made from curved slices */
     for(int s=0;s<50;s++){
@@ -853,6 +922,187 @@ static void box3D(float x,float y,float z,float sx,float sy,float sz,Color c){
     glEnd();
 }
 
+static void gableRoof3D(float x,float y,float z,float sx,float sy,float sz,Color c){
+    Color top=shade(c,1.16f), side=shade(c,0.74f), dark=shade(c,0.54f);
+    float xl=x-sx/2, xr=x+sx/2, zf=z-sz/2, zb=z+sz/2, yr=y+sy;
+    glBegin(GL_TRIANGLES);
+    glColor3ub(c.r,c.g,c.b);
+    glVertex3f(xl,y,zf); glVertex3f(xr,y,zf); glVertex3f(x,yr,zf);
+    glColor3ub(dark.r,dark.g,dark.b);
+    glVertex3f(xr,y,zb); glVertex3f(xl,y,zb); glVertex3f(x,yr,zb);
+    glEnd();
+    glBegin(GL_QUADS);
+    glColor3ub(top.r,top.g,top.b);
+    glVertex3f(xl,y,zf); glVertex3f(x,yr,zf); glVertex3f(x,yr,zb); glVertex3f(xl,y,zb);
+    glColor3ub(side.r,side.g,side.b);
+    glVertex3f(x,yr,zf); glVertex3f(xr,y,zf); glVertex3f(xr,y,zb); glVertex3f(x,yr,zb);
+    glEnd();
+}
+
+static void windowPane3D(float x,float y,float z,float side,float w,float h,Color glass){
+    glBegin(GL_QUADS);
+    glColor3ub(glass.r,glass.g,glass.b);
+    glVertex3f(x,y,z-w/2); glVertex3f(x,y,z+w/2);
+    glColor3ub(210,232,236);
+    glVertex3f(x,y+h,z+w/2); glVertex3f(x,y+h,z-w/2);
+    glEnd();
+    box3D(x-side*0.012f,y+h*0.48f,z,0.025f,0.018f,w*1.14f,(Color){45,56,58,255});
+}
+
+static void drawHouseModel3D(float x,float z,float side,int style){
+    Color walls[4]={{196,174,132,255},{188,198,172,255},{205,183,158,255},{172,186,190,255}};
+    Color roofs[4]={{128,60,46,255},{82,86,90,255},{145,84,52,255},{108,70,58,255}};
+    Color wall=walls[style%4], roof=roofs[(style+1)%4];
+    float w=1.35f+0.16f*(style%3), d=1.28f+0.12f*((style+1)%3), h=0.82f+0.10f*(style%2);
+    box3D(x,0.0f,z,w,h,d,wall);
+    gableRoof3D(x,h,z,w+0.28f,0.45f,d+0.22f,roof);
+    float faceX=x-side*(w/2+0.018f);
+    windowPane3D(faceX,0.36f,z-0.32f,-side,0.28f,0.22f,(Color){105,170,202,255});
+    windowPane3D(faceX,0.36f,z+0.32f,-side,0.28f,0.22f,(Color){105,170,202,255});
+    box3D(faceX,0.0f,z,0.05f,0.42f,0.26f,(Color){82,58,42,255});
+    box3D(x,0.0f,z+side*0.02f,w+0.12f,0.04f,d+0.18f,(Color){115,105,90,255});
+}
+
+static void drawShopModel3D(float x,float z,float side,int style){
+    Color wall=(style%2)?(Color){184,160,118,255}:(Color){174,182,166,255};
+    float w=1.65f, d=1.18f, h=0.78f;
+    box3D(x,0.0f,z,w,h,d,wall);
+    box3D(x,h,z,w+0.18f,0.16f,d+0.10f,(Color){58,64,68,255});
+    box3D(x-side*(w/2+0.08f),0.55f,z,0.08f,0.18f,d+0.22f,(Color){188,42,44,255});
+    for(int i=0;i<3;i++){
+        windowPane3D(x-side*(w/2+0.035f),0.28f,z-0.36f+i*0.36f,-side,0.22f,0.20f,(Color){104,168,204,255});
+    }
+    box3D(x-side*(w/2+0.05f),0.0f,z,0.08f,0.42f,0.28f,(Color){55,65,70,255});
+    box3D(x,0.0f,z,w+0.18f,0.04f,d+0.18f,(Color){92,86,74,255});
+}
+
+static void drawTowerModel3D(float x,float z,float side,int style){
+    Color wall=(style%2)?(Color){164,174,176,255}:(Color){178,164,150,255};
+    Color trim=(style%2)?(Color){75,90,98,255}:(Color){112,76,66,255};
+    float w=1.18f+0.1f*(style%2), d=1.05f, h=1.42f+0.18f*(style%3);
+    box3D(x,0.0f,z,w,h,d,wall);
+    box3D(x,h,z,w+0.12f,0.12f,d+0.12f,trim);
+    for(int row=0;row<3;row++){
+        for(int col=0;col<2;col++){
+            windowPane3D(x-side*(w/2+0.02f),0.34f+row*0.32f,z-0.25f+col*0.50f,-side,0.20f,0.18f,(Color){98,158,192,255});
+        }
+    }
+    box3D(x-side*(w/2+0.04f),0.0f,z,0.06f,0.36f,0.24f,(Color){50,58,62,255});
+}
+
+static void drawRoadsideModels3D(void){
+    for(int i=0;i<14;i++){
+        int step=(i*13+(int)(roadOff*0.72f))%122;
+        float z=-5.5f-(float)step;
+        int right=(i%2);
+        float side=right?1.0f:-1.0f;
+        float x=roadCurveAtZ(z)+side*(roadHalfAtZ(z)+2.05f+(float)((i*7)%5)*0.28f);
+        int type=(i*5+right)%5;
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glBegin(GL_QUADS);
+        glColor4ub(0,0,0,60);
+        glVertex3f(x-0.95f,0.012f,z-0.88f); glVertex3f(x+0.95f,0.012f,z-0.88f);
+        glColor4ub(0,0,0,22);
+        glVertex3f(x+1.12f,0.012f,z+0.95f); glVertex3f(x-1.12f,0.012f,z+0.95f);
+        glEnd();
+        glDisable(GL_BLEND);
+
+        if(type==0 || type==3) drawHouseModel3D(x,z,side,i);
+        else if(type==1) drawShopModel3D(x,z,side,i);
+        else drawTowerModel3D(x,z,side,i);
+    }
+}
+
+static void drawWheelModel3D(float x,float y,float z,float side,float s){
+    float cx=x+side*0.50f*s, w=0.20f*s, r=0.20f*s;
+    GLUquadric *q=gluNewQuadric();
+    if(!q) return;
+    glPushMatrix();
+    glTranslatef(cx-side*w/2,y,z);
+    glRotatef(side>0.0f?90.0f:-90.0f,0.0f,1.0f,0.0f);
+    glColor3ub(12,12,14);
+    gluCylinder(q,r,r,w,24,1);
+    gluDisk(q,r*0.58f,r,24,1);
+    glTranslatef(0.0f,0.0f,w);
+    gluDisk(q,r*0.58f,r,24,1);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(cx+side*(w/2+0.012f),y,z);
+    glRotatef(90.0f,0.0f,1.0f,0.0f);
+    glColor3ub(185,194,198);
+    gluDisk(q,0.0f,r*0.52f,24,1);
+    glPopMatrix();
+    box3D(cx+side*0.012f,y-0.025f,z,0.025f,0.05f,r*1.08f,(Color){82,88,90,255});
+    box3D(cx+side*0.012f,y-r*0.54f,z,0.025f,0.05f,r*1.08f,(Color){82,88,90,255});
+    gluDeleteQuadric(q);
+}
+
+static void drawSportModel3D(float x,float z,float s,Color body,int isPlayer,float bob){
+    Color side=shade(body,0.64f), dark=shade(body,0.42f), hi=shade(body,1.25f);
+    float y0=0.10f+bob, y1=0.44f*s+bob;
+    float zf=z-0.96f*s, zr=z+0.94f*s;
+    float wf=0.72f*s, wr=0.98f*s, tf=0.48f*s, tr=0.72f*s;
+
+    glBegin(GL_QUADS);
+    glColor3ub(hi.r,hi.g,hi.b);
+    glVertex3f(x-tf/2,y1,zf+0.16f*s); glVertex3f(x+tf/2,y1,zf+0.16f*s);
+    glVertex3f(x+tr/2,y1,zr-0.14f*s); glVertex3f(x-tr/2,y1,zr-0.14f*s);
+    glColor3ub(body.r,body.g,body.b);
+    glVertex3f(x-wf/2,y0,zf); glVertex3f(x+wf/2,y0,zf);
+    glVertex3f(x+tf/2,y1,zf+0.16f*s); glVertex3f(x-tf/2,y1,zf+0.16f*s);
+    glColor3ub(side.r,side.g,side.b);
+    glVertex3f(x+wf/2,y0,zf); glVertex3f(x+wr/2,y0,zr);
+    glVertex3f(x+tr/2,y1,zr-0.14f*s); glVertex3f(x+tf/2,y1,zf+0.16f*s);
+    glVertex3f(x-wr/2,y0,zr); glVertex3f(x-wf/2,y0,zf);
+    glVertex3f(x-tf/2,y1,zf+0.16f*s); glVertex3f(x-tr/2,y1,zr-0.14f*s);
+    glColor3ub(dark.r,dark.g,dark.b);
+    glVertex3f(x+wr/2,y0,zr); glVertex3f(x-wr/2,y0,zr);
+    glVertex3f(x-tr/2,y1,zr-0.14f*s); glVertex3f(x+tr/2,y1,zr-0.14f*s);
+    glEnd();
+
+    /* Sloped glass canopy */
+    glBegin(GL_QUADS);
+    glColor3ub(58,112,142);
+    glVertex3f(x-0.34f*s,0.47f*s+bob,z-0.35f*s);
+    glVertex3f(x+0.34f*s,0.47f*s+bob,z-0.35f*s);
+    glColor3ub(30,70,100);
+    glVertex3f(x+0.25f*s,0.78f*s+bob,z+0.28f*s);
+    glVertex3f(x-0.25f*s,0.78f*s+bob,z+0.28f*s);
+    glEnd();
+    box3D(x,0.78f*s+bob,z+0.07f*s,0.42f*s,0.05f*s,0.54f*s,(Color){24,52,76,255});
+
+    /* Aerodynamic pieces */
+    box3D(x,0.24f*s+bob,zf-0.03f*s,0.38f*s,0.08f*s,0.05f*s,(Color){22,22,24,255});
+    box3D(x,0.55f*s+bob,zr+0.06f*s,1.05f*s,0.08f*s,0.12f*s,shade(body,0.50f));
+    box3D(x-0.58f*s,0.48f*s+bob,z-0.26f*s,0.11f*s,0.07f*s,0.16f*s,shade(body,0.78f));
+    box3D(x+0.58f*s,0.48f*s+bob,z-0.26f*s,0.11f*s,0.07f*s,0.16f*s,shade(body,0.78f));
+    box3D(x-0.58f*s,0.18f*s+bob,z,0.10f*s,0.14f*s,1.42f*s,shade(body,0.50f));
+    box3D(x+0.58f*s,0.18f*s+bob,z,0.10f*s,0.14f*s,1.42f*s,shade(body,0.50f));
+    box3D(x,0.46f*s+bob,z-0.50f*s,0.20f*s,0.035f*s,0.56f*s,shade(body,1.38f));
+    box3D(x,0.25f*s+bob,zf-0.08f*s,0.32f*s,0.07f*s,0.035f*s,(Color){24,24,27,255});
+    box3D(x-0.22f*s,0.20f*s+bob,zr+0.11f*s,0.16f*s,0.05f*s,0.045f*s,(Color){210,18,28,255});
+    box3D(x+0.22f*s,0.20f*s+bob,zr+0.11f*s,0.16f*s,0.05f*s,0.045f*s,(Color){210,18,28,255});
+    box3D(x-0.40f*s,0.34f*s+bob,z-0.18f*s,0.045f*s,0.18f*s,0.42f*s,(Color){34,80,108,255});
+    box3D(x+0.40f*s,0.34f*s+bob,z-0.18f*s,0.045f*s,0.18f*s,0.42f*s,(Color){34,80,108,255});
+    box3D(x-0.42f*s,0.13f*s+bob,z-0.48f*s,0.18f*s,0.12f*s,0.34f*s,shade(body,0.82f));
+    box3D(x+0.42f*s,0.13f*s+bob,z-0.48f*s,0.18f*s,0.12f*s,0.34f*s,shade(body,0.82f));
+    box3D(x-0.42f*s,0.13f*s+bob,z+0.48f*s,0.18f*s,0.12f*s,0.34f*s,shade(body,0.74f));
+    box3D(x+0.42f*s,0.13f*s+bob,z+0.48f*s,0.18f*s,0.12f*s,0.34f*s,shade(body,0.74f));
+
+    drawWheelModel3D(x,0.20f*s+bob,z-0.48f*s,-1.0f,s);
+    drawWheelModel3D(x,0.20f*s+bob,z+0.48f*s,-1.0f,s);
+    drawWheelModel3D(x,0.20f*s+bob,z-0.48f*s, 1.0f,s);
+    drawWheelModel3D(x,0.20f*s+bob,z+0.48f*s, 1.0f,s);
+
+    box3D(x-0.24f*s,0.31f*s+bob,zf-0.05f*s,0.18f*s,0.08f*s,0.04f*s,(Color){255,246,170,255});
+    box3D(x+0.24f*s,0.31f*s+bob,zf-0.05f*s,0.18f*s,0.08f*s,0.04f*s,(Color){255,246,170,255});
+    box3D(x-0.26f*s,0.27f*s+bob,zr+0.05f*s,0.18f*s,0.07f*s,0.04f*s,(Color){235,28,35,255});
+    box3D(x+0.26f*s,0.27f*s+bob,zr+0.05f*s,0.18f*s,0.07f*s,0.04f*s,(Color){235,28,35,255});
+    if(isPlayer) box3D(x,0.46f*s+bob,z-0.12f*s,0.10f*s,0.035f*s,1.25f*s,(Color){30,255,225,255});
+}
+
 static void drawWheel3D(float x,float z,float side){
     box3D(x+side*0.43f,0.06f,z-0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
     box3D(x+side*0.43f,0.06f,z+0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
@@ -869,12 +1119,12 @@ static void drawWheel3D(float x,float z,float side){
 static void drawCar(Car *c,int isPlayer){
     if(!c->active) return;
     use3D();
-    float carZ=isPlayer ? -5.8f : carDepth(c);
+    float carZ=isPlayer ? -4.8f : carDepth(c);
     float carX=roadCurveAtZ(carZ)+carLanePos(c);
     if(!isPlayer && (carZ>-3.4f || carZ<-118.0f)) return;
     float carBob=(float)pulse(frameNo+(int)c->y,32,3)*0.015f;
-    float s=isPlayer ? 1.08f : 1.0f;
-    if(!isPlayer && carZ<-35.0f) s=1.0f+((-35.0f-carZ)/83.0f)*0.55f;
+    float s=isPlayer ? 1.15f : 1.10f;
+    if(!isPlayer && carZ<-28.0f) s=1.10f+((-28.0f-carZ)/90.0f)*0.70f;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
@@ -889,6 +1139,8 @@ static void drawCar(Car *c,int isPlayer){
 
     Color body=c->body;
     if(isPlayer && invFrames>0 && (invFrames/5)%2==0) body=(Color){235,250,255,255};
+    drawSportModel3D(carX,carZ,s,body,isPlayer,carBob);
+    return;
     box3D(carX,0.10f+carBob,carZ,0.82f*s,0.34f*s,1.45f*s,body);
     box3D(carX,0.42f*s+carBob,carZ-0.05f*s,0.56f*s,0.36f*s,0.72f*s,
           isPlayer?(Color){105,210,255,255}:(Color){210,220,235,255});
