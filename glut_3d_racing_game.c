@@ -3,6 +3,24 @@
     ------------------------------------------------
     University project version.
 
+    Project idea:
+      This is an endless arcade racing game. The player drives a sports car
+      on a 3D road, avoids enemy traffic, earns score and distance, and sees
+      scenery change automatically over time.
+
+    Code organization:
+      1. Constants and structures define the game data.
+      2. Utility functions handle math, colors, text, and simple shapes.
+      3. Lighting and sky functions create the day-night cycle.
+      4. Drawing functions render cars, road, buildings, trees, and scenery.
+      5. Gameplay functions update movement, traffic, score, and collision.
+      6. GLUT callback functions connect the game to keyboard and display.
+
+    Important note:
+      The game uses simple OpenGL primitive shapes such as cubes, spheres,
+      cones, torus wheels, and transparent quads. This keeps the project pure C,
+      beginner-friendly, and easy to explain in a university viva.
+
     Build in Code::Blocks:
       Link libraries: freeglut, opengl32, glu32, winmm
       If your GLUT package is old, use glut32 instead of freeglut.
@@ -22,9 +40,11 @@
 #include <time.h>
 #include <math.h>
 
+/* Window size used by GLUT when the game starts. */
 #define WIN_W 1000
 #define WIN_H 700
 
+/* Gameplay and object limits. Fixed-size arrays are simple and safe for C. */
 #define NUM_LANES 3
 #define MAX_ENEMIES 9
 #define MAX_TREES 64
@@ -32,18 +52,21 @@
 #define MAX_BUILDINGS 28
 #define MAX_BARRIERS 80
 
+/* Road and spawn values. Z is the forward/backward direction in this game. */
 #define ROAD_HALF_WIDTH 6.1f
 #define ROAD_LENGTH 210.0f
 #define PLAYER_Z 8.0f
 #define SPAWN_Z -165.0f
 #define PI 3.14159265f
 
+/* Screen/state values for menu, play, pause, and game over. */
 #define STATE_MENU 0
 #define STATE_INSTRUCTIONS 1
 #define STATE_PLAYING 2
 #define STATE_PAUSED 3
 #define STATE_GAME_OVER 4
 
+/* Environment IDs. The game cycles through these scenes during play. */
 #define ENV_CITY 0
 #define ENV_RIVER 1
 #define ENV_HILLS 2
@@ -51,9 +74,12 @@
 #define ENV_DESERT 4
 #define ENV_FLOWER 5
 #define ENV_COUNT 6
+
+/* Each environment lasts 6.5 seconds; the final part blends into the next. */
 #define ENV_SEGMENT_SECONDS 6.5f
 #define ENV_BLEND_SECONDS 0.35f
 
+/* Vehicle stores both visual data and gameplay data for player/enemy cars. */
 typedef struct {
     float x, z;
     float width, depth, height;
@@ -63,20 +89,24 @@ typedef struct {
     int active;
 } Vehicle;
 
+/* Reused by scenery objects such as trees, lamps, buildings, and barriers. */
 typedef struct {
     float x, z, scale;
     int type;
 } RoadObject;
 
+/* Simple rectangular collision box on the road plane. */
 typedef struct {
     float x, z, w, d;
 } HitBox;
 
+/* Current game state and keyboard state. */
 static int gameState = STATE_MENU;
 static int keyLeft = 0, keyRight = 0, keyUp = 0, keyDown = 0;
 static int lastTime = 0;
 static int highScore = 0;
 
+/* Main game objects. */
 static Vehicle player;
 static Vehicle enemies[MAX_ENEMIES];
 static RoadObject trees[MAX_TREES];
@@ -84,6 +114,7 @@ static RoadObject lights[MAX_LIGHTS];
 static RoadObject buildings[MAX_BUILDINGS];
 static RoadObject barriers[MAX_BARRIERS];
 
+/* Core gameplay variables updated every frame. */
 static float roadOffset = 0.0f;
 static float playerTargetX = 0.0f;
 static float gameSpeed = 26.0f;
@@ -96,47 +127,57 @@ static float dayNightTime = 0.15f;
 static float cameraX = 0.0f;
 static int enemyLimit = 4;
 
+/* Convert lane number 0, 1, 2 into road X position. */
 static float laneX(int lane) {
     return (lane - 1) * 3.55f;
 }
 
+/* Return a random float between a and b. */
 static float frandRange(float a, float b) {
     return a + (float)rand() / (float)RAND_MAX * (b - a);
 }
 
+/* Keep a number inside a minimum and maximum range. */
 static float clampf(float v, float a, float b) {
     if (v < a) return a;
     if (v > b) return b;
     return v;
 }
 
+/* Linear interpolation, useful for smooth color/value transitions. */
 static float lerpf(float a, float b, float t) {
     return a + (b - a) * t;
 }
 
+/* Sine wave converted to the 0..1 range for smooth repeated animation. */
 static float wave01(float x) {
     return (sinf(x * PI * 2.0f) + 1.0f) * 0.5f;
 }
 
+/* Smooth interpolation curve so environment changes do not feel harsh. */
 static float smoothStep(float t) {
     t = clampf(t, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
 
+/* Brightness of the world based on the day-night timer. */
 static float daylightAmount(void) {
     return clampf(sinf(dayNightTime * PI * 2.0f) * 0.72f + 0.38f, 0.10f, 1.0f);
 }
 
+/* Opposite of daylight. Used for lamps, headlights, and glowing windows. */
 static float nightAmount(void) {
     return 1.0f - daylightAmount();
 }
 
+/* Extra warm light near sunrise and sunset. */
 static float sunsetAmount(void) {
     float evening = 1.0f - fabsf(dayNightTime - 0.72f) / 0.12f;
     float sunrise = 1.0f - fabsf(dayNightTime - 0.05f) / 0.10f;
     return clampf(evening > sunrise ? evening : sunrise, 0.0f, 1.0f);
 }
 
+/* Human-readable time name for the HUD. */
 static const char *timeOfDayName(void) {
     if (dayNightTime < 0.16f) return "Sunrise";
     if (dayNightTime < 0.42f) return "Morning";
@@ -146,21 +187,25 @@ static const char *timeOfDayName(void) {
     return "Late Night";
 }
 
+/* Select the active scenery zone from elapsed gameplay time. */
 static int currentEnvironment(void) {
     int zone = (int)(difficultyTimer / ENV_SEGMENT_SECONDS) % ENV_COUNT;
     if (zone < 0) zone = 0;
     return zone;
 }
 
+/* The next zone is used for transition blending. */
 static int nextEnvironment(void) {
     return (currentEnvironment() + 1) % ENV_COUNT;
 }
 
+/* Returns 0 normally and approaches 1 near the end of an environment segment. */
 static float environmentBlend(void) {
     float pos = fmodf(difficultyTimer, ENV_SEGMENT_SECONDS);
     return smoothStep((pos - (ENV_SEGMENT_SECONDS - ENV_BLEND_SECONDS)) / ENV_BLEND_SECONDS);
 }
 
+/* Weight of each environment. Current scene fades out while next scene fades in. */
 static float environmentWeight(int zone) {
     int current = currentEnvironment();
     int next = nextEnvironment();
@@ -170,6 +215,7 @@ static float environmentWeight(int zone) {
     return 0.0f;
 }
 
+/* Text shown in the HUD for the current/next environment. */
 static const char *environmentName(void) {
     float blend = environmentBlend();
     int zone = blend > 0.5f ? nextEnvironment() : currentEnvironment();
@@ -182,10 +228,12 @@ static const char *environmentName(void) {
     return "City";
 }
 
+/* Small wrapper so color calls are easy to read. */
 static void setColor3f(float r, float g, float b) {
     glColor3f(r, g, b);
 }
 
+/* Draw bitmap text in 2D overlay coordinates. */
 static void drawText2D(float x, float y, const char *text, void *font) {
     glRasterPos2f(x, y);
     while (*text) {
@@ -193,6 +241,7 @@ static void drawText2D(float x, float y, const char *text, void *font) {
     }
 }
 
+/* Switch from 3D camera projection to 2D UI drawing. */
 static void begin2D(void) {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -205,6 +254,7 @@ static void begin2D(void) {
     glDisable(GL_LIGHTING);
 }
 
+/* Restore 3D drawing state after drawing HUD/menu panels. */
 static void end2D(void) {
     glEnable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -214,6 +264,7 @@ static void end2D(void) {
     glPopMatrix();
 }
 
+/* Center text horizontally by measuring its bitmap width. */
 static void drawCenteredText(float y, const char *text, void *font) {
     int width = 0;
     const char *p = text;
@@ -221,6 +272,7 @@ static void drawCenteredText(float y, const char *text, void *font) {
     drawText2D((WIN_W - width) * 0.5f, y, text, font);
 }
 
+/* Draw a colored 3D cube at position x/y/z with scale sx/sy/sz. */
 static void cube(float x, float y, float z,
                  float sx, float sy, float sz,
                  float r, float g, float b) {
@@ -232,6 +284,7 @@ static void cube(float x, float y, float z,
     glPopMatrix();
 }
 
+/* Draw a transparent cube, mainly used for glow and soft visual effects. */
 static void cubeAlpha(float x, float y, float z,
                       float sx, float sy, float sz,
                       float r, float g, float b, float a) {
@@ -248,6 +301,7 @@ static void cubeAlpha(float x, float y, float z,
     glPopMatrix();
 }
 
+/* Draw a scaled sphere to create curved car parts and scenery shapes. */
 static void sphereShape(float x, float y, float z,
                         float sx, float sy, float sz,
                         float r, float g, float b) {
@@ -259,6 +313,11 @@ static void sphereShape(float x, float y, float z,
     glPopMatrix();
 }
 
+/*
+   Update OpenGL lights from current time of day.
+   LIGHT0 works like sun/moon light.
+   LIGHT1 works like the player's headlight during dark scenes.
+*/
 static void applyWorldLighting(void) {
     float day = daylightAmount();
     float night = nightAmount();
@@ -292,6 +351,7 @@ static void applyWorldLighting(void) {
     glDisable(GL_FOG);
 }
 
+/* Set background sky color from day, night, sunrise, and sunset values. */
 static void setSkyColor(void) {
     float day = daylightAmount();
     float sunset = sunsetAmount();
@@ -304,6 +364,7 @@ static void setSkyColor(void) {
                  1.0f);
 }
 
+/* Draw one rotating wheel/rim using torus rings and small spoke cubes. */
 static void drawWheel(float x, float y, float z, float side) {
     int i;
     float spin = fmodf(roadOffset * 18.0f + z * 95.0f, 360.0f);
@@ -326,6 +387,12 @@ static void drawWheel(float x, float y, float z, float side) {
     glPopMatrix();
 }
 
+/*
+   Render a complete car model.
+   isPlayer = 1 draws the hero/player car with extra body parts, stripes,
+   LED bars, spoiler, and more premium details.
+   isPlayer = 0 draws enemy sports cars using several style variations.
+*/
 static void drawCarModel(const Vehicle *v, int isPlayer) {
     float x = v->x, z = v->z;
     float steerTilt = isPlayer ? (playerTargetX - player.x) * -5.0f : 0.0f;
@@ -494,6 +561,10 @@ static void drawCarModel(const Vehicle *v, int isPlayer) {
     glPopMatrix();
 }
 
+/*
+   Draw the road, ground, lane divider marks, road texture bands, and side lines.
+   roadOffset makes lane dividers move toward the player, which creates speed.
+*/
 static void drawRoad(void) {
     float zStart = -ROAD_LENGTH + fmodf(roadOffset, 8.0f);
     float day = daylightAmount();
@@ -590,6 +661,7 @@ static void drawRoad(void) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw a roadside tree using a trunk cube and cone leaves. */
 static void drawTree(float x, float z, float s) {
     float day = daylightAmount();
     cube(x, 0.45f * s, z, 0.22f * s, 0.90f * s, 0.22f * s, 0.30f, 0.16f, 0.07f);
@@ -603,6 +675,7 @@ static void drawTree(float x, float z, float s) {
     glPopMatrix();
 }
 
+/* Draw tall street light poles; glow appears stronger at night. */
 static void drawStreetLight(float x, float z) {
     float armDir = (x < 0.0f) ? 1.0f : -1.0f;
     float lampX = x + armDir * 0.75f;
@@ -611,6 +684,7 @@ static void drawStreetLight(float x, float z) {
     cube(lampX, 3.32f, z, 0.34f, 0.16f, 0.26f, 0.82f, 0.90f, 1.0f);
 }
 
+/* Draw a small decorative neon sign for city scenery. */
 static void drawNeonSign(float x, float y, float z, float w, int type) {
     float night = nightAmount();
     glDisable(GL_LIGHTING);
@@ -630,6 +704,7 @@ static void drawNeonSign(float x, float y, float z, float w, int type) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw modern city buildings with windows that glow at night. */
 static void drawBuilding(float x, float z, float w, float h, float d,
                          float r, float g, float b, int type) {
     int row, col;
@@ -757,11 +832,13 @@ static void drawBuilding(float x, float z, float w, float h, float d,
     }
 }
 
+/* Draw road barrier blocks along the road side. */
 static void drawBarrier(float x, float z) {
     cube(x, 0.22f, z, 0.35f, 0.44f, 1.25f, 0.95f, 0.95f, 0.90f);
     cube(x, 0.34f, z + 0.20f, 0.37f, 0.18f, 0.38f, 0.9f, 0.08f, 0.06f);
 }
 
+/* Draw simple city traffic lights as decorative environment objects. */
 static void drawTrafficLight(float x, float z) {
     float night = nightAmount();
     cube(x, 1.05f, z, 0.08f, 2.10f, 0.08f, 0.18f, 0.18f, 0.18f);
@@ -773,6 +850,7 @@ static void drawTrafficLight(float x, float z) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw small billboards placed away from the road to avoid blocking vision. */
 static void drawBillboard(float x, float z, int type) {
     float night = nightAmount();
     cube(x - 0.40f, 0.75f, z, 0.06f, 1.50f, 0.06f, 0.22f, 0.22f, 0.23f);
@@ -795,6 +873,7 @@ static void drawBillboard(float x, float z, int type) {
     }
 }
 
+/* Draw different village/countryside houses. */
 static void drawVillageHouse(float x, float z, float s, int type) {
     type %= 5;
     if (type == 0) {
@@ -843,6 +922,7 @@ static void drawVillageHouse(float x, float z, float s, int type) {
     }
 }
 
+/* Draw a crop/farm patch beside village roads. */
 static void drawFarmPatch(float x, float z, float w, float d) {
     int i;
     glDisable(GL_LIGHTING);
@@ -866,6 +946,7 @@ static void drawFarmPatch(float x, float z, float w, float d) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw river water for village scenery. */
 static void drawVillageRiver(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -888,6 +969,7 @@ static void drawVillageRiver(float strength) {
 }
 
 #if 0
+/* Legacy tunnel helper kept for future reuse; final cycle currently skips tunnel. */
 static void drawTunnelRib(float z, float alpha, int portal) {
     float wallR = portal ? 0.34f : 0.18f;
     float wallG = portal ? 0.36f : 0.19f;
@@ -901,6 +983,7 @@ static void drawTunnelRib(float z, float alpha, int portal) {
     cubeAlpha( 6.28f, 4.78f, z, 2.25f, 0.34f, beamDepth, wallR * 1.10f, wallG * 1.10f, wallB * 1.10f, alpha);
 }
 
+/* Draw one tunnel entrance/exit face for the legacy tunnel scene. */
 static void drawTunnelPortalFace(float z, float alpha, int exitPortal) {
     if (alpha < 0.03f) return;
 
@@ -929,6 +1012,7 @@ static void drawTunnelPortalFace(float z, float alpha, int exitPortal) {
     glEnable(GL_LIGHTING);
 }
 
+/* Full tunnel scene renderer; kept unused after replacing tunnel with outdoor zones. */
 static void drawTunnelScene(float strength) {
     int i;
     int current = currentEnvironment();
@@ -1156,6 +1240,7 @@ static void drawTunnelScene(float strength) {
 }
 #endif
 
+/* Draw one cactus for desert scenery. */
 static void drawCactus(float x, float z, float s) {
     cube(x, 0.55f * s, z, 0.20f * s, 1.10f * s, 0.20f * s, 0.06f, 0.36f, 0.18f);
     cube(x - 0.30f * s, 0.75f * s, z, 0.16f * s, 0.55f * s, 0.16f * s, 0.06f, 0.34f, 0.16f);
@@ -1164,6 +1249,7 @@ static void drawCactus(float x, float z, float s) {
     cube(x + 0.18f * s, 1.05f * s, z, 0.34f * s, 0.14f * s, 0.14f * s, 0.07f, 0.39f, 0.18f);
 }
 
+/* Draw one palm tree; currently kept as reusable scenery code. */
 static void drawPalmTree(float x, float z, float s) {
     int i;
     cube(x, 0.78f * s, z, 0.20f * s, 1.55f * s, 0.20f * s, 0.48f, 0.27f, 0.10f);
@@ -1179,6 +1265,7 @@ static void drawPalmTree(float x, float z, float s) {
     glPopMatrix();
 }
 
+/* Legacy beach umbrella object, no longer used in the active environment cycle. */
 static void drawBeachUmbrella(float x, float z, float s, int colorType) {
     float r = colorType ? 0.95f : 0.10f;
     float g = colorType ? 0.18f : 0.52f;
@@ -1194,6 +1281,7 @@ static void drawBeachUmbrella(float x, float z, float s, int colorType) {
          0.90f, 0.78f, 0.50f);
 }
 
+/* Legacy beach hut object, no longer used in the active environment cycle. */
 static void drawBeachHut(float x, float z, float s, int type) {
     float r = type ? 0.18f : 0.92f;
     float g = type ? 0.52f : 0.58f;
@@ -1209,6 +1297,7 @@ static void drawBeachHut(float x, float z, float s, int type) {
     cube(x + 0.28f * s, 0.30f * s, z - 0.51f * s, 0.30f * s, 0.44f * s, 0.04f, 0.18f, 0.08f, 0.04f);
 }
 
+/* Draw the desert environment using sand color, cactuses, and dune shapes. */
 static void drawDesertScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1242,6 +1331,7 @@ static void drawDesertScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw the final flower garden environment with colorful flower rows. */
 static void drawFlowerGardenScene(float strength) {
     int i, j;
     if (strength < 0.04f) return;
@@ -1314,6 +1404,7 @@ static void drawFlowerGardenScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Legacy beach environment; kept unused because beach was replaced by river. */
 static void drawBeachScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1418,6 +1509,7 @@ static void drawBeachScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw the river-area environment with continuous blue water beside the road. */
 static void drawRiverScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1481,6 +1573,7 @@ static void drawRiverScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Legacy snow environment; kept unused because snow was removed from final design. */
 static void drawSnowScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1536,6 +1629,7 @@ static void drawSnowScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Draw the hilly environment with layered green hills and trees. */
 static void drawHillScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1569,6 +1663,7 @@ static void drawHillScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+/* Initialize arrays of reusable roadside objects before the game starts. */
 static void initEnvironmentObjects(void) {
     int i;
     for (i = 0; i < MAX_TREES; i++) {
@@ -1593,11 +1688,13 @@ static void initEnvironmentObjects(void) {
     }
 }
 
+/* Move scenery forward; when it passes the camera, reset it far ahead. */
 static void updateLoopedObject(float *z, float dt, float resetBehind) {
     *z += gameSpeed * dt;
     if (*z > 34.0f) *z = resetBehind;
 }
 
+/* Draw all scenery systems and blend between active environments. */
 static void drawEnvironment(float dt) {
     int i;
     float farReset;
@@ -1700,6 +1797,7 @@ static void drawEnvironment(float dt) {
     drawVillageRiver(villageW);
 }
 
+/* Randomize enemy car body size, color, and visual style. */
 static void chooseEnemyStyle(Vehicle *e) {
     int style = rand() % 5;
     e->type = style;
@@ -1713,6 +1811,7 @@ static void chooseEnemyStyle(Vehicle *e) {
     if (style == 4) { e->r = 0.78f; e->g = 0.08f; e->b = 0.86f; e->width -= 0.06f; }
 }
 
+/* Prevent enemy cars from spawning too close together in the same lane. */
 static int laneIsSafe(int lane, float z) {
     int i;
     for (i = 0; i < MAX_ENEMIES; i++) {
@@ -1723,6 +1822,7 @@ static int laneIsSafe(int lane, float z) {
     return 1;
 }
 
+/* Spawn or respawn one enemy car ahead of the player. */
 static void spawnEnemy(int i) {
     int attempts;
     for (attempts = 0; attempts < 8; attempts++) {
@@ -1740,6 +1840,7 @@ static void spawnEnemy(int i) {
     enemies[i].active = 0;
 }
 
+/* Reset all gameplay values when starting or restarting the game. */
 static void resetGame(void) {
     int i;
     player.x = laneX(1);
@@ -1770,6 +1871,7 @@ static void resetGame(void) {
     for (i = 0; i < enemyLimit; i++) spawnEnemy(i);
 }
 
+/* Build a fair collision hitbox from a vehicle's physical body size. */
 static HitBox getHitBox(const Vehicle *v) {
     HitBox h;
     h.x = v->x;
@@ -1781,6 +1883,7 @@ static HitBox getHitBox(const Vehicle *v) {
     return h;
 }
 
+/* Collision happens only when hitboxes overlap on both X and Z axes. */
 static int collide(const Vehicle *a, const Vehicle *b) {
     HitBox x = getHitBox(a);
     HitBox y = getHitBox(b);
@@ -1790,6 +1893,10 @@ static int collide(const Vehicle *a, const Vehicle *b) {
     return dx <= (x.w + y.w) && dz <= (x.d + y.d);
 }
 
+/*
+   Main gameplay update.
+   dt is frame time in seconds, so movement stays smooth on different PCs.
+*/
 static void updateGame(float dt) {
     int i;
     float steerSpeed = 9.4f;
@@ -1842,6 +1949,7 @@ static void updateGame(float dt) {
     }
 }
 
+/* Draw subtle speed/headlight streaks on the road. */
 static void drawHeadlightEffect(void) {
     float speedAlpha = clampf((gameSpeed - 32.0f) / 75.0f, 0.0f, 0.30f);
     int i;
@@ -1863,6 +1971,7 @@ static void drawHeadlightEffect(void) {
     glEnable(GL_LIGHTING);
 }
 
+/* Configure the 3D chase camera and perspective projection. */
 static void setupCamera(void) {
     float speedPullback = clampf((gameSpeed - 26.0f) / 85.0f, 0.0f, 1.0f);
     glMatrixMode(GL_PROJECTION);
@@ -1876,6 +1985,7 @@ static void setupCamera(void) {
               0.0f, 1.0f, 0.0f);
 }
 
+/* Draw score, high score, speed, distance, time, and environment text. */
 static void drawHUD(void) {
     char text[128];
     begin2D();
@@ -1895,6 +2005,7 @@ static void drawHUD(void) {
     end2D();
 }
 
+/* Draw the complete 3D world for the current frame. */
 static void drawScene3D(float dt) {
     int i;
     setupCamera();
@@ -1913,6 +2024,7 @@ static void drawScene3D(float dt) {
     }
 }
 
+/* Draw a translucent rectangle behind menu text. */
 static void drawPanel(float x, float y, float w, float h) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1926,6 +2038,7 @@ static void drawPanel(float x, float y, float w, float h) {
     glDisable(GL_BLEND);
 }
 
+/* Draw the start menu screen. */
 static void drawMenu(void) {
     begin2D();
     drawPanel(190, 160, 620, 360);
@@ -1940,6 +2053,7 @@ static void drawMenu(void) {
     end2D();
 }
 
+/* Draw the instructions/help screen. */
 static void drawInstructions(void) {
     begin2D();
     drawPanel(150, 110, 700, 480);
@@ -1956,6 +2070,7 @@ static void drawInstructions(void) {
     end2D();
 }
 
+/* Draw the pause overlay. */
 static void drawPause(void) {
     begin2D();
     drawPanel(270, 260, 460, 160);
@@ -1966,6 +2081,7 @@ static void drawPause(void) {
     end2D();
 }
 
+/* Draw the game over screen with final score and restart option. */
 static void drawGameOver(void) {
     char text[128];
     begin2D();
@@ -1984,6 +2100,7 @@ static void drawGameOver(void) {
     end2D();
 }
 
+/* GLUT display callback: update game, render 3D scene, then render UI. */
 static void display(void) {
     int now = glutGet(GLUT_ELAPSED_TIME);
     float dt = (now - lastTime) / 1000.0f;
@@ -2003,12 +2120,14 @@ static void display(void) {
     glutSwapBuffers();
 }
 
+/* GLUT timer callback: request a new frame roughly every 16 ms. */
 static void timer(int value) {
     (void)value;
     glutPostRedisplay();
     glutTimerFunc(16, timer, 0);
 }
 
+/* Handle normal keyboard keys such as Enter, P, I, R, and Esc. */
 static void normalKey(unsigned char key, int x, int y) {
     (void)x; (void)y;
     if (key == 27) {
@@ -2036,6 +2155,7 @@ static void normalKey(unsigned char key, int x, int y) {
     }
 }
 
+/* Handle arrow-key press events. */
 static void specialDown(int key, int x, int y) {
     (void)x; (void)y;
     if (key == GLUT_KEY_LEFT) keyLeft = 1;
@@ -2044,6 +2164,7 @@ static void specialDown(int key, int x, int y) {
     if (key == GLUT_KEY_DOWN) keyDown = 1;
 }
 
+/* Handle arrow-key release events. */
 static void specialUp(int key, int x, int y) {
     (void)x; (void)y;
     if (key == GLUT_KEY_LEFT) keyLeft = 0;
@@ -2052,10 +2173,12 @@ static void specialUp(int key, int x, int y) {
     if (key == GLUT_KEY_DOWN) keyDown = 0;
 }
 
+/* Update OpenGL viewport if the window size changes. */
 static void reshape(int w, int h) {
     glViewport(0, 0, w, h);
 }
 
+/* Enable depth testing, lighting, color material, and smooth shading. */
 static void initOpenGL(void) {
     GLfloat lightPos[] = { 0.0f, 12.0f, 10.0f, 1.0f };
     GLfloat lightAmb[] = { 0.35f, 0.35f, 0.35f, 1.0f };
@@ -2073,6 +2196,7 @@ static void initOpenGL(void) {
     glShadeModel(GL_SMOOTH);
 }
 
+/* Read saved high score from disk if the file exists. */
 static void loadHighScore(void) {
     FILE *f = fopen("glut_highscore.dat", "r");
     if (f) {
@@ -2081,6 +2205,7 @@ static void loadHighScore(void) {
     }
 }
 
+/* Program entry point: initialize GLUT, register callbacks, and start loop. */
 int main(int argc, char **argv) {
     srand((unsigned int)time(NULL));
     loadHighScore();
