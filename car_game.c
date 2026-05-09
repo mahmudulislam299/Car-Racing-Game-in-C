@@ -77,6 +77,7 @@ typedef struct {
     Color body;
     int   active;
     int   lane;
+    int   vehicle;
 } Car;
 
 typedef struct {
@@ -650,6 +651,7 @@ static void spawnEnemy(int idx){
             enemies[idx].body   = enemyCols[rand()%6];
             enemies[idx].active = 1;
             enemies[idx].lane   = lane;
+            enemies[idx].vehicle= 1+rand()%4;
             return;
         }
     }
@@ -1449,6 +1451,78 @@ static void drawSportModel3D(float x,float z,float s,Color body,int isPlayer,flo
     if(isPlayer) box3D(x,0.46f*s+bob,z-0.12f*s,0.10f*s,0.035f*s,1.25f*s,(Color){30,255,225,255});
 }
 
+static void drawCngModel3D(float x,float z,float s,Color body,float bob){
+    Color green={24,138,78,255}, yellow={244,196,48,255};
+    Color roof={28,42,38,255}, glass={86,178,198,255};
+    box3D(x,0.11f*s+bob,z,0.86f*s,0.34f*s,1.36f*s,green);
+    box3D(x,0.47f*s+bob,z-0.08f*s,0.72f*s,0.54f*s,0.90f*s,green);
+    box3D(x,0.96f*s+bob,z-0.08f*s,0.82f*s,0.10f*s,0.98f*s,roof);
+    box3D(x,0.62f*s+bob,z-0.58f*s,0.48f*s,0.22f*s,0.05f*s,glass);
+    box3D(x-0.40f*s,0.49f*s+bob,z-0.06f*s,0.045f*s,0.28f*s,0.62f*s,(Color){18,84,56,255});
+    box3D(x+0.40f*s,0.49f*s+bob,z-0.06f*s,0.045f*s,0.28f*s,0.62f*s,(Color){18,84,56,255});
+    box3D(x,0.25f*s+bob,z-0.78f*s,0.50f*s,0.16f*s,0.16f*s,yellow);
+    box3D(x,0.18f*s+bob,z+0.72f*s,0.58f*s,0.12f*s,0.12f*s,shade(green,0.65f));
+    drawWheelModel3D(x,0.14f*s+bob,z-0.42f*s,-1.0f,s*0.88f);
+    drawWheelModel3D(x,0.14f*s+bob,z-0.42f*s, 1.0f,s*0.88f);
+    box3D(x,0.09f*s+bob,z+0.58f*s,0.22f*s,0.24f*s,0.30f*s,(Color){16,16,18,255});
+    box3D(x,0.26f*s+bob,z-0.90f*s,0.13f*s,0.07f*s,0.04f*s,(Color){255,242,158,255});
+}
+
+static void drawRickshawModel3D(float x,float z,float s,Color body,float bob){
+    Color frame={210,40,54,255}, canopy={38,160,86,255}, cloth={244,208,58,255};
+    box3D(x,0.12f*s+bob,z+0.20f*s,0.92f*s,0.24f*s,0.78f*s,frame);
+    box3D(x,0.44f*s+bob,z+0.20f*s,0.82f*s,0.50f*s,0.70f*s,cloth);
+    box3D(x,0.92f*s+bob,z+0.20f*s,0.96f*s,0.10f*s,0.84f*s,canopy);
+    box3D(x-0.48f*s,0.34f*s+bob,z+0.20f*s,0.055f*s,0.72f*s,0.055f*s,(Color){48,58,50,255});
+    box3D(x+0.48f*s,0.34f*s+bob,z+0.20f*s,0.055f*s,0.72f*s,0.055f*s,(Color){48,58,50,255});
+    box3D(x,0.22f*s+bob,z-0.42f*s,0.44f*s,0.10f*s,0.64f*s,(Color){110,70,42,255});
+    box3D(x,0.20f*s+bob,z-0.86f*s,0.12f*s,0.08f*s,0.55f*s,(Color){48,58,50,255});
+    drawWheelModel3D(x,0.10f*s+bob,z+0.48f*s,-1.0f,s*0.82f);
+    drawWheelModel3D(x,0.10f*s+bob,z+0.48f*s, 1.0f,s*0.82f);
+    box3D(x,0.08f*s+bob,z-0.98f*s,0.26f*s,0.28f*s,0.18f*s,(Color){16,16,18,255});
+    box3D(x,0.56f*s+bob,z+0.58f*s,0.42f*s,0.22f*s,0.05f*s,(Color){72,170,205,255});
+}
+
+static void drawBusModel3D(float x,float z,float s,Color body,float bob){
+    Color bus={238,190,44,255}, lower={38,146,88,255}, glass={70,150,188,255};
+    box3D(x,0.12f*s+bob,z,1.16f*s,0.62f*s,1.72f*s,bus);
+    box3D(x,0.16f*s+bob,z+0.14f*s,1.20f*s,0.24f*s,1.34f*s,lower);
+    box3D(x,0.78f*s+bob,z,1.10f*s,0.10f*s,1.74f*s,(Color){54,62,58,255});
+    for(int i=0;i<4;i++){
+        box3D(x-0.48f*s+i*0.32f*s,0.50f*s+bob,z-0.70f*s,0.22f*s,0.18f*s,0.055f*s,glass);
+    }
+    box3D(x,0.52f*s+bob,z-0.89f*s,0.72f*s,0.22f*s,0.055f*s,glass);
+    box3D(x,0.27f*s+bob,z-0.94f*s,0.32f*s,0.10f*s,0.05f*s,(Color){255,238,146,255});
+    box3D(x,0.23f*s+bob,z+0.91f*s,0.42f*s,0.08f*s,0.05f*s,(Color){210,24,30,255});
+    drawWheelModel3D(x,0.14f*s+bob,z-0.58f*s,-1.0f,s*0.95f);
+    drawWheelModel3D(x,0.14f*s+bob,z+0.58f*s,-1.0f,s*0.95f);
+    drawWheelModel3D(x,0.14f*s+bob,z-0.58f*s, 1.0f,s*0.95f);
+    drawWheelModel3D(x,0.14f*s+bob,z+0.58f*s, 1.0f,s*0.95f);
+}
+
+static void drawPickupModel3D(float x,float z,float s,Color body,float bob){
+    Color cab={54,126,194,255}, cargo={166,104,58,255};
+    box3D(x,0.12f*s+bob,z+0.24f*s,1.02f*s,0.34f*s,0.98f*s,cargo);
+    box3D(x,0.18f*s+bob,z-0.56f*s,0.86f*s,0.52f*s,0.72f*s,cab);
+    box3D(x,0.62f*s+bob,z-0.68f*s,0.58f*s,0.22f*s,0.06f*s,(Color){82,170,202,255});
+    box3D(x,0.44f*s+bob,z+0.16f*s,1.04f*s,0.08f*s,0.96f*s,(Color){88,58,38,255});
+    box3D(x,0.24f*s+bob,z-0.94f*s,0.34f*s,0.09f*s,0.05f*s,(Color){255,238,150,255});
+    box3D(x,0.22f*s+bob,z+0.79f*s,0.30f*s,0.07f*s,0.05f*s,(Color){210,22,28,255});
+    drawWheelModel3D(x,0.13f*s+bob,z-0.52f*s,-1.0f,s*0.92f);
+    drawWheelModel3D(x,0.13f*s+bob,z+0.50f*s,-1.0f,s*0.92f);
+    drawWheelModel3D(x,0.13f*s+bob,z-0.52f*s, 1.0f,s*0.92f);
+    drawWheelModel3D(x,0.13f*s+bob,z+0.50f*s, 1.0f,s*0.92f);
+}
+
+static void drawBangladeshVehicle3D(float x,float z,float s,int vehicle,Color body,float bob){
+    switch(vehicle){
+        case 1: drawCngModel3D(x,z,s,body,bob); break;
+        case 2: drawRickshawModel3D(x,z,s,body,bob); break;
+        case 3: drawBusModel3D(x,z,s*0.95f,body,bob); break;
+        default: drawPickupModel3D(x,z,s,body,bob); break;
+    }
+}
+
 static void drawWheel3D(float x,float z,float side){
     box3D(x+side*0.43f,0.06f,z-0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
     box3D(x+side*0.43f,0.06f,z+0.42f,0.22f,0.30f,0.34f,(Color){14,14,16,255});
@@ -1489,7 +1563,8 @@ static void drawCar(Car *c,int isPlayer){
 
     Color body=c->body;
     if(isPlayer && invFrames>0 && (invFrames/5)%2==0) body=(Color){235,250,255,255};
-    drawSportModel3D(carX,carZ,s,body,isPlayer,carBob);
+    if(isPlayer) drawSportModel3D(carX,carZ,s,body,isPlayer,carBob);
+    else drawBangladeshVehicle3D(carX,carZ,s,c->vehicle,body,carBob);
     glPopMatrix();
     return;
     box3D(carX,0.10f+carBob,carZ,0.82f*s,0.34f*s,1.45f*s,body);
@@ -1793,6 +1868,7 @@ static void resetGame(void){
     player.speed= PLAYER_SPEED;
     player.body =(Color){0,210,255,255};
     player.active=1;
+    player.vehicle=0;
     for(int i=0;i<MAX_ENEMIES;i++){
         enemies[i].active=0;
         enemies[i].y=(float)(-CAR_H - i*140);  /* stagger heights */
@@ -1827,9 +1903,9 @@ static void titleScreen(void){
 
         /* Three demo cars in each lane */
         Car d; d.active=1; d.speed=0;
-        d.x=(float)laneX(0); d.y=200+pulse(frameNo,50,12); d.body=(Color){220,0,0,255};   drawCar(&d,0);
-        d.x=(float)laneX(1); d.y=210-pulse(frameNo,46,10); d.body=(Color){0,210,255,255}; drawCar(&d,1);
-        d.x=(float)laneX(2); d.y=198+pulse(frameNo+20,54,12); d.body=(Color){100,180,0,255}; drawCar(&d,0);
+        d.x=(float)laneX(0); d.y=200+pulse(frameNo,50,12); d.body=(Color){24,138,78,255}; d.vehicle=1; drawCar(&d,0);
+        d.x=(float)laneX(1); d.y=210-pulse(frameNo,46,10); d.body=(Color){0,210,255,255}; d.vehicle=0; drawCar(&d,1);
+        d.x=(float)laneX(2); d.y=198+pulse(frameNo+20,54,12); d.body=(Color){244,208,58,255}; d.vehicle=2; drawCar(&d,0);
 
         renderCentered("Controls:",                         295,yellow,font);
         renderCentered("LEFT / RIGHT arrows  =  steer",    317,white, font);
