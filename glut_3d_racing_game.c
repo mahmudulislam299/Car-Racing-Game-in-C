@@ -45,12 +45,13 @@
 #define STATE_GAME_OVER 4
 
 #define ENV_CITY 0
-#define ENV_DESERT 1
-#define ENV_BEACH 2
-#define ENV_HILLS 3
-#define ENV_VILLAGE 4
-#define ENV_COUNT 5
-#define ENV_SEGMENT_SECONDS 5.0f
+#define ENV_RIVER 1
+#define ENV_HILLS 2
+#define ENV_VILLAGE 3
+#define ENV_DESERT 4
+#define ENV_FLOWER 5
+#define ENV_COUNT 6
+#define ENV_SEGMENT_SECONDS 6.5f
 #define ENV_BLEND_SECONDS 0.35f
 
 typedef struct {
@@ -174,9 +175,10 @@ static const char *environmentName(void) {
     int zone = blend > 0.5f ? nextEnvironment() : currentEnvironment();
     if (zone == ENV_CITY) return "City";
     if (zone == ENV_DESERT) return "Desert";
-    if (zone == ENV_BEACH) return "Sea Beach";
+    if (zone == ENV_RIVER) return "River Area";
     if (zone == ENV_HILLS) return "Hilly Area";
     if (zone == ENV_VILLAGE) return "Village";
+    if (zone == ENV_FLOWER) return "Flower Garden";
     return "City";
 }
 
@@ -497,36 +499,37 @@ static void drawRoad(void) {
     float day = daylightAmount();
     float night = nightAmount();
     float desert = environmentWeight(ENV_DESERT);
-    float beach = environmentWeight(ENV_BEACH);
+    float river = environmentWeight(ENV_RIVER);
     float hills = environmentWeight(ENV_HILLS);
     float village = environmentWeight(ENV_VILLAGE);
+    float flower = environmentWeight(ENV_FLOWER);
     int i;
 
     /* Ground */
     glDisable(GL_LIGHTING);
     glBegin(GL_QUADS);
-    setColor3f(0.02f + 0.06f * day + 0.48f * desert + 0.38f * beach + 0.05f * hills,
-               0.13f + 0.28f * day + 0.20f * desert + 0.28f * beach + 0.16f * hills + 0.10f * village,
-               0.06f + 0.10f * day + 0.04f * desert + 0.18f * beach + 0.05f * hills);
+    setColor3f(0.02f + 0.06f * day + 0.48f * desert + 0.08f * river + 0.05f * hills + 0.08f * flower,
+               0.13f + 0.28f * day + 0.20f * desert + 0.18f * river + 0.16f * hills + 0.10f * village + 0.24f * flower,
+               0.06f + 0.10f * day + 0.04f * desert + 0.16f * river + 0.05f * hills + 0.05f * flower);
     glVertex3f(-80.0f, 0.0f,  35.0f);
     glVertex3f( 80.0f, 0.0f,  35.0f);
-    setColor3f(0.01f + 0.04f * day + 0.40f * desert + 0.30f * beach + 0.04f * hills,
-               0.09f + 0.21f * day + 0.16f * desert + 0.23f * beach + 0.13f * hills + 0.08f * village,
-               0.05f + 0.08f * day + 0.04f * desert + 0.16f * beach + 0.05f * hills);
+    setColor3f(0.01f + 0.04f * day + 0.40f * desert + 0.06f * river + 0.04f * hills + 0.05f * flower,
+               0.09f + 0.21f * day + 0.16f * desert + 0.14f * river + 0.13f * hills + 0.08f * village + 0.20f * flower,
+               0.05f + 0.08f * day + 0.04f * desert + 0.14f * river + 0.05f * hills + 0.04f * flower);
     glVertex3f( 80.0f, 0.0f, -ROAD_LENGTH);
     glVertex3f(-80.0f, 0.0f, -ROAD_LENGTH);
     glEnd();
 
     /* Asphalt */
     glBegin(GL_QUADS);
-    setColor3f(0.060f + 0.11f * day + 0.015f * desert + 0.010f * beach,
-               0.064f + 0.10f * day + 0.012f * desert + 0.012f * beach,
-               0.075f + 0.11f * day + 0.010f * beach);
+    setColor3f(0.060f + 0.11f * day + 0.015f * desert,
+               0.064f + 0.10f * day + 0.012f * desert,
+               0.075f + 0.11f * day);
     glVertex3f(-ROAD_HALF_WIDTH, 0.02f,  30.0f);
     glVertex3f( ROAD_HALF_WIDTH, 0.02f,  30.0f);
-    setColor3f(0.032f + 0.065f * day + 0.010f * desert + 0.008f * beach,
-               0.034f + 0.065f * day + 0.008f * desert + 0.010f * beach,
-               0.045f + 0.075f * day + 0.010f * beach);
+    setColor3f(0.032f + 0.065f * day + 0.010f * desert,
+               0.034f + 0.065f * day + 0.008f * desert,
+               0.045f + 0.075f * day);
     glVertex3f( ROAD_HALF_WIDTH, 0.02f, -ROAD_LENGTH);
     glVertex3f(-ROAD_HALF_WIDTH, 0.02f, -ROAD_LENGTH);
     glEnd();
@@ -1239,6 +1242,78 @@ static void drawDesertScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+static void drawFlowerGardenScene(float strength) {
+    int i, j;
+    if (strength < 0.04f) return;
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_QUADS);
+    /* Rich garden grass beside both sides of the road. */
+    glColor4f(0.06f, 0.34f, 0.10f, 0.68f * strength);
+    glVertex3f(-80.0f, 0.026f, 34.0f);
+    glVertex3f(-6.7f, 0.026f, 34.0f);
+    glColor4f(0.10f, 0.50f, 0.16f, 0.74f * strength);
+    glVertex3f(-7.4f, 0.026f, -ROAD_LENGTH);
+    glVertex3f(-80.0f, 0.026f, -ROAD_LENGTH);
+
+    glColor4f(0.06f, 0.34f, 0.10f, 0.68f * strength);
+    glVertex3f(6.7f, 0.026f, 34.0f);
+    glVertex3f(80.0f, 0.026f, 34.0f);
+    glColor4f(0.10f, 0.50f, 0.16f, 0.74f * strength);
+    glVertex3f(80.0f, 0.026f, -ROAD_LENGTH);
+    glVertex3f(7.4f, 0.026f, -ROAD_LENGTH);
+    glEnd();
+
+    for (i = 0; i < 34; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.30f, 7.0f) + i * 7.0f;
+        if (z > 32.0f) continue;
+        for (j = 0; j < 4; j++) {
+            float sideX = 10.0f + j * 4.2f;
+            float rr = (j == 0) ? 0.95f : (j == 1) ? 1.0f : (j == 2) ? 0.25f : 0.95f;
+            float gg = (j == 0) ? 0.18f : (j == 1) ? 0.78f : (j == 2) ? 0.55f : 0.35f;
+            float bb = (j == 0) ? 0.28f : (j == 1) ? 0.12f : (j == 2) ? 1.0f : 0.85f;
+
+            glBegin(GL_QUADS);
+            glColor4f(rr, gg, bb, 0.78f * strength);
+            glVertex3f(-sideX - 0.38f, 0.055f, z);
+            glVertex3f(-sideX + 0.38f, 0.055f, z + 0.20f);
+            glVertex3f(-sideX + 0.28f, 0.055f, z + 0.90f);
+            glVertex3f(-sideX - 0.48f, 0.055f, z + 0.70f);
+            glVertex3f(sideX - 0.38f, 0.055f, z);
+            glVertex3f(sideX + 0.38f, 0.055f, z + 0.20f);
+            glVertex3f(sideX + 0.28f, 0.055f, z + 0.90f);
+            glVertex3f(sideX - 0.48f, 0.055f, z + 0.70f);
+            glEnd();
+        }
+    }
+
+    /* Low white garden fences following the road. */
+    for (i = 0; i < 26; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.45f, 9.0f) + i * 9.0f;
+        if (z > 32.0f) continue;
+        cubeAlpha(-8.2f, 0.34f, z, 0.12f, 0.58f, 0.12f, 0.95f, 0.94f, 0.86f, 0.76f * strength);
+        cubeAlpha( 8.2f, 0.34f, z, 0.12f, 0.58f, 0.12f, 0.95f, 0.94f, 0.86f, 0.76f * strength);
+        cubeAlpha(-8.2f, 0.56f, z + 2.2f, 0.14f, 0.10f, 4.8f, 0.95f, 0.94f, 0.86f, 0.56f * strength);
+        cubeAlpha( 8.2f, 0.56f, z + 2.2f, 0.14f, 0.10f, 4.8f, 0.95f, 0.94f, 0.86f, 0.56f * strength);
+    }
+
+    for (i = 0; i < 10; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.24f, 24.0f) + i * 24.0f;
+        if (z > 30.0f) continue;
+        drawTree(-17.0f - (i % 3) * 3.0f, z, 0.58f + 0.08f * (i % 2));
+        drawTree( 17.0f + (i % 3) * 3.0f, z + 5.0f, 0.58f + 0.08f * (i % 2));
+        cubeAlpha(-12.0f, 1.25f, z + 2.2f, 0.18f, 1.80f, 0.18f, 0.62f, 0.38f, 0.18f, 0.72f * strength);
+        cubeAlpha( 12.0f, 1.25f, z + 2.2f, 0.18f, 1.80f, 0.18f, 0.62f, 0.38f, 0.18f, 0.72f * strength);
+        cubeAlpha( 0.0f, 2.10f, z + 2.2f, 24.0f, 0.16f, 0.18f, 0.62f, 0.38f, 0.18f, 0.58f * strength);
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
 static void drawBeachScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1343,6 +1418,124 @@ static void drawBeachScene(float strength) {
     glEnable(GL_LIGHTING);
 }
 
+static void drawRiverScene(float strength) {
+    int i;
+    if (strength < 0.04f) return;
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_QUADS);
+    /* Wide blue river beside the highway. */
+    glColor4f(0.02f, 0.20f, 0.42f, 0.72f * strength);
+    glVertex3f(-80.0f, 0.018f, 34.0f);
+    glVertex3f(-20.0f, 0.018f, 34.0f);
+    glColor4f(0.06f, 0.44f, 0.66f, 0.78f * strength);
+    glVertex3f(-23.5f, 0.018f, -ROAD_LENGTH);
+    glVertex3f(-80.0f, 0.018f, -ROAD_LENGTH);
+
+    glColor4f(0.08f, 0.36f, 0.20f, 0.54f * strength);
+    glVertex3f(-21.0f, 0.030f, 34.0f);
+    glVertex3f(-7.0f, 0.030f, 34.0f);
+    glColor4f(0.05f, 0.28f, 0.13f, 0.56f * strength);
+    glVertex3f(-7.5f, 0.030f, -ROAD_LENGTH);
+    glVertex3f(-24.0f, 0.030f, -ROAD_LENGTH);
+
+    glColor4f(0.07f, 0.34f, 0.18f, 0.42f * strength);
+    glVertex3f(7.0f, 0.028f, 34.0f);
+    glVertex3f(24.0f, 0.028f, 34.0f);
+    glColor4f(0.05f, 0.26f, 0.14f, 0.48f * strength);
+    glVertex3f(24.5f, 0.028f, -ROAD_LENGTH);
+    glVertex3f(7.4f, 0.028f, -ROAD_LENGTH);
+    glEnd();
+
+    for (i = 0; i < 30; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.35f, 9.0f) + i * 9.0f;
+        float bend = sinf((z + roadOffset * 0.12f) * 0.10f) * 1.8f;
+        if (z > 34.0f) continue;
+        glBegin(GL_LINES);
+        glColor4f(0.70f, 0.95f, 1.0f, 0.28f * strength);
+        glVertex3f(-74.0f, 0.044f, z);
+        glVertex3f(-31.0f + bend, 0.044f, z + 2.0f);
+        glColor4f(0.55f, 0.82f, 0.95f, 0.18f * strength);
+        glVertex3f(-28.0f + bend * 0.5f, 0.044f, z + 2.8f);
+        glVertex3f(-18.0f, 0.044f, z + 3.6f);
+        glEnd();
+    }
+
+    for (i = 0; i < 8; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.22f, 28.0f) + i * 28.0f;
+        if (z > 30.0f) continue;
+        cubeAlpha(-14.5f, 0.30f, z, 0.22f, 0.60f, 0.22f, 0.34f, 0.22f, 0.10f, 0.70f * strength);
+        cubeAlpha(-12.0f, 0.30f, z + 0.7f, 0.22f, 0.60f, 0.22f, 0.34f, 0.22f, 0.10f, 0.70f * strength);
+        cubeAlpha(-13.25f, 0.78f, z + 0.35f, 3.4f, 0.16f, 0.24f, 0.48f, 0.30f, 0.12f, 0.78f * strength);
+    }
+
+    for (i = 0; i < 18; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.28f, 18.0f) + i * 18.0f;
+        float x = (i % 2 == 0) ? -13.0f - (i % 3) * 2.6f : 12.5f + (i % 3) * 2.8f;
+        drawTree(x, z, 0.62f + 0.08f * (i % 3));
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
+static void drawSnowScene(float strength) {
+    int i;
+    if (strength < 0.04f) return;
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_QUADS);
+    glColor4f(0.86f, 0.93f, 0.98f, 0.78f * strength);
+    glVertex3f(-80.0f, 0.030f, 34.0f);
+    glVertex3f(-6.8f, 0.030f, 34.0f);
+    glColor4f(0.76f, 0.88f, 0.96f, 0.82f * strength);
+    glVertex3f(-7.4f, 0.030f, -ROAD_LENGTH);
+    glVertex3f(-80.0f, 0.030f, -ROAD_LENGTH);
+
+    glColor4f(0.88f, 0.95f, 1.0f, 0.76f * strength);
+    glVertex3f(6.8f, 0.030f, 34.0f);
+    glVertex3f(80.0f, 0.030f, 34.0f);
+    glColor4f(0.78f, 0.90f, 0.98f, 0.82f * strength);
+    glVertex3f(80.0f, 0.030f, -ROAD_LENGTH);
+    glVertex3f(7.4f, 0.030f, -ROAD_LENGTH);
+
+    /* Frozen blue lake/ice strip on the left. */
+    glColor4f(0.52f, 0.82f, 0.96f, 0.48f * strength);
+    glVertex3f(-62.0f, 0.042f, 34.0f);
+    glVertex3f(-24.0f, 0.042f, 34.0f);
+    glColor4f(0.78f, 0.95f, 1.0f, 0.52f * strength);
+    glVertex3f(-27.0f, 0.042f, -ROAD_LENGTH);
+    glVertex3f(-64.0f, 0.042f, -ROAD_LENGTH);
+    glEnd();
+
+    for (i = 0; i < 26; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.30f, 10.0f) + i * 10.0f;
+        if (z > 32.0f) continue;
+        glBegin(GL_LINES);
+        glColor4f(0.92f, 0.98f, 1.0f, 0.42f * strength);
+        glVertex3f(-60.0f, 0.055f, z);
+        glVertex3f(-28.0f, 0.055f, z + 2.0f);
+        glColor4f(0.72f, 0.88f, 1.0f, 0.28f * strength);
+        glVertex3f(13.0f, 0.055f, z + 1.5f);
+        glVertex3f(34.0f, 0.055f, z + 4.0f);
+        glEnd();
+    }
+
+    for (i = 0; i < 18; i++) {
+        float z = -ROAD_LENGTH + fmodf(roadOffset * 0.28f, 16.0f) + i * 16.0f;
+        float x = (i % 2 == 0) ? -15.0f - (i % 3) * 2.6f : 14.0f + (i % 3) * 2.8f;
+        drawTree(x, z, 0.62f + 0.08f * (i % 3));
+        sphereShape(x + 0.30f, 0.18f, z + 0.60f, 0.55f, 0.14f, 0.45f, 0.92f, 0.96f, 1.0f);
+    }
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
+
 static void drawHillScene(float strength) {
     int i;
     if (strength < 0.04f) return;
@@ -1413,9 +1606,10 @@ static void drawEnvironment(float dt) {
     float sunset = sunsetAmount();
     float cityW = environmentWeight(ENV_CITY);
     float desertW = environmentWeight(ENV_DESERT);
-    float beachW = environmentWeight(ENV_BEACH);
+    float riverW = environmentWeight(ENV_RIVER);
     float hillsW = environmentWeight(ENV_HILLS);
     float villageW = environmentWeight(ENV_VILLAGE);
+    float flowerW = environmentWeight(ENV_FLOWER);
 
     /* Distant skyline haze and river sections. */
     glDisable(GL_LIGHTING);
@@ -1454,10 +1648,12 @@ static void drawEnvironment(float dt) {
         updateLoopedObject(&trees[i].z, dt, -ROAD_LENGTH + frandRange(-20.0f, 0.0f));
         if (villageW > 0.06f) {
             drawTree(trees[i].x, trees[i].z, trees[i].scale * (0.95f + 0.25f * villageW));
+        } else if (flowerW > 0.08f) {
+            drawTree(trees[i].x * 0.85f, trees[i].z, trees[i].scale * 0.62f);
+        } else if (riverW > 0.08f) {
+            drawTree(trees[i].x * 0.82f, trees[i].z, trees[i].scale * 0.74f);
         } else if (hillsW > 0.08f) {
             drawTree(trees[i].x * 0.92f, trees[i].z, trees[i].scale * (0.80f + 0.25f * hillsW));
-        } else if (beachW > 0.08f && i % 3 == 0) {
-            drawPalmTree(trees[i].x * 0.82f, trees[i].z, trees[i].scale * 0.78f);
         } else if (cityW > 0.08f) {
             drawTree(trees[i].x * 0.70f, trees[i].z, trees[i].scale * 0.68f);
         }
@@ -1498,7 +1694,8 @@ static void drawEnvironment(float dt) {
     }
 
     drawDesertScene(desertW);
-    drawBeachScene(beachW);
+    drawFlowerGardenScene(flowerW);
+    drawRiverScene(riverW);
     drawHillScene(hillsW);
     drawVillageRiver(villageW);
 }
@@ -1596,7 +1793,6 @@ static int collide(const Vehicle *a, const Vehicle *b) {
 static void updateGame(float dt) {
     int i;
     float steerSpeed = 9.4f;
-    float scenicMorning;
 
     if (keyLeft)  playerTargetX -= steerSpeed * dt;
     if (keyRight) playerTargetX += steerSpeed * dt;
@@ -1613,7 +1809,7 @@ static void updateGame(float dt) {
 
     difficultyTimer += dt;
     trafficTimer += dt;
-    dayNightTime += dt / 95.0f;
+    dayNightTime += dt / 55.0f;
     if (dayNightTime > 1.0f) dayNightTime -= 1.0f;
     gameSpeed = baseSpeed + difficultyTimer * 0.55f;
     if (gameSpeed > 95.0f) gameSpeed = 95.0f;
@@ -1624,16 +1820,6 @@ static void updateGame(float dt) {
     roadOffset += gameSpeed * dt;
     score += dt * (gameSpeed * 0.18f);
     distanceCovered += gameSpeed * dt * 0.20f;
-
-    scenicMorning = clampf(environmentWeight(ENV_BEACH) * 0.65f +
-                          environmentWeight(ENV_HILLS) * 0.75f +
-                          environmentWeight(ENV_VILLAGE) * 0.75f, 0.0f, 1.0f);
-    if (scenicMorning > 0.04f) {
-        float morningTarget = 0.30f;
-        dayNightTime += (morningTarget - dayNightTime) * dt * 0.85f * scenicMorning;
-        if (dayNightTime < 0.0f) dayNightTime += 1.0f;
-        if (dayNightTime > 1.0f) dayNightTime -= 1.0f;
-    }
 
     for (i = 0; i < enemyLimit; i++) {
         if (!enemies[i].active) {
