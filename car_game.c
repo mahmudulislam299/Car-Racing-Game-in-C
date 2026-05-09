@@ -70,6 +70,7 @@ typedef struct { Uint8 r, g, b, a; } Color;
 
 /* Axis-aligned bounding box */
 typedef struct { int x1, y1, x2, y2; } AABB;
+typedef struct { float x, z, halfW, halfD; } HitBox3D;
 
 typedef struct {
     float x, y;
@@ -608,6 +609,35 @@ static int aabbOverlap(AABB a,AABB b){
              a.y2-1<b.y1+1 || a.y1+1>b.y2-1);
 }
 
+static void vehicleHitSize(Car *c,int isPlayer,float *halfW,float *halfD){
+    if(isPlayer || c->vehicle==0){
+        *halfW=0.56f; *halfD=1.03f;
+    }else if(c->vehicle==1){
+        *halfW=0.46f; *halfD=0.76f;  /* CNG */
+    }else if(c->vehicle==2){
+        *halfW=0.52f; *halfD=0.86f;  /* Rickshaw */
+    }else if(c->vehicle==3){
+        *halfW=0.60f; *halfD=0.92f;  /* Bus */
+    }else{
+        *halfW=0.56f; *halfD=0.86f;  /* Pickup/truck */
+    }
+}
+
+static HitBox3D getCarHitBox3D(Car *c,int isPlayer){
+    HitBox3D b;
+    b.x=isPlayer ? playerLanePos() : carLanePos(c);
+    b.z=isPlayer ? -4.8f : carDepth(c);
+    vehicleHitSize(c,isPlayer,&b.halfW,&b.halfD);
+    return b;
+}
+
+static int hitBox3DOverlap(HitBox3D a,HitBox3D b){
+    float dx=a.x-b.x; if(dx<0.0f) dx=-dx;
+    float dz=a.z-b.z; if(dz<0.0f) dz=-dz;
+    return dx < (a.halfW+b.halfW)*0.88f &&
+           dz < (a.halfD+b.halfD)*0.82f;
+}
+
 /* ══════════════════════════════════════════════
    laneX() – left pixel edge of a lane's car slot
    Each car is centred inside its 180 px lane.
@@ -1114,6 +1144,7 @@ static void drawRoad(void){
         glVertex3f(c2+h2+0.62f,roadSurfaceY(z-3.2f,h2+0.62f)+0.06f,z-3.2f); glVertex3f(c2+h2+0.10f,roadSurfaceY(z-3.2f,h2+0.10f)+0.06f,z-3.2f);
         glEnd();
     }
+
 }
 
 /* ══════════════════════════════════════════════
@@ -2021,10 +2052,10 @@ int main(int argc,char *argv[]){
                Uses AABB that covers the entire car INCLUDING side wheels.
                Any tyre overlap triggers a life deduction.              */
             if(invFrames==0){
-                AABB pb=getCarAABB(&player);
+                HitBox3D pb=getCarHitBox3D(&player,1);
                 for(int i=0;i<MAX_ENEMIES;i++){
                     if(!enemies[i].active) continue;
-                    if(aabbOverlap(pb, getCarAABB(&enemies[i]))){
+                    if(hitBox3DOverlap(pb, getCarHitBox3D(&enemies[i],0))){
 
                         /* 1) spawn sparks at impact point */
                         spawnExplosion((int)(player.x+CAR_W/2),
